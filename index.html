@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hdnews — 유통·홈쇼핑 뉴스 모니터링</title>
+  <meta name="description" content="유통 업계와 홈쇼핑 12개사의 뉴스·리스크를 한눈에 모니터링">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-row">
+      <h1 class="logo">📺 hdnews</h1>
+      <span class="updated-at" id="updatedAt"></span>
+      <div class="header-actions">
+        <input type="search" id="searchInput" class="search-input" placeholder="키워드 검색 (전체 기사)" autocomplete="off">
+        <button id="themeToggle" class="icon-btn" title="다크/라이트 전환">🌙</button>
+      </div>
+    </div>
+    <nav class="tab-bar" id="tabBar">
+      <a href="#/dashboard" data-tab="dashboard">대시보드</a>
+      <a href="#/retail" data-tab="retail">유통 종합</a>
+      <a href="#/homeshopping" data-tab="homeshopping">홈쇼핑</a>
+      <a href="#/risk" data-tab="risk" class="tab-risk">리스크</a>
+      <a href="#/policy" data-tab="policy">정책·규제</a>
+      <a href="#/ecommerce" data-tab="ecommerce">이커머스</a>
+      <a href="#/scrap" data-tab="scrap">스크랩 <span id="scrapCount" class="scrap-count"></span></a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div id="loading" class="empty-state">데이터를 불러오는 중…</div>
+  </main>
+
+  <footer class="site-footer">
+    <p>네이버 뉴스 검색 API · 구글뉴스 RSS 기반 자동 수집 · 30분 주기 갱신</p>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

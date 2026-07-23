@@ -1,0 +1,40 @@
+{
+  "companies": [
+    { "id": "gsshop", "name": "GS샵", "type": "TV홈쇼핑", "aliases": ["GS샵", "GS홈쇼핑", "지에스샵"] },
+    { "id": "cj", "name": "CJ온스타일", "type": "TV홈쇼핑", "aliases": ["CJ온스타일", "CJ오쇼핑"] },
+    { "id": "lotte", "name": "롯데홈쇼핑", "type": "TV홈쇼핑", "aliases": ["롯데홈쇼핑"] },
+    { "id": "hyundai", "name": "현대홈쇼핑", "type": "TV홈쇼핑", "aliases": ["현대홈쇼핑"] },
+    { "id": "ns", "name": "NS홈쇼핑", "type": "TV홈쇼핑", "aliases": ["NS홈쇼핑", "엔에스홈쇼핑"] },
+    { "id": "hns", "name": "홈앤쇼핑", "type": "TV홈쇼핑", "aliases": ["홈앤쇼핑"] },
+    { "id": "gongyoung", "name": "공영쇼핑", "type": "TV홈쇼핑", "aliases": ["공영쇼핑", "공영홈쇼핑"] },
+    { "id": "skstoa", "name": "SK스토아", "type": "T커머스", "aliases": ["SK스토아"] },
+    { "id": "ktalpha", "name": "KT알파쇼핑", "type": "T커머스", "aliases": ["KT알파쇼핑", "KT알파 쇼핑"] },
+    { "id": "ssglive", "name": "신세계라이브쇼핑", "type": "T커머스", "aliases": ["신세계라이브쇼핑"] },
+    { "id": "wshop", "name": "W쇼핑", "type": "T커머스", "aliases": ["W쇼핑", "더블유쇼핑"] },
+    { "id": "shoppingnt", "name": "쇼핑엔티", "type": "T커머스", "aliases": ["쇼핑엔티"] }
+  ],
+  "topicQueries": {
+    "retail": ["유통업계", "대형마트 실적", "백화점 업계", "편의점 업계"],
+    "homeshopping": ["홈쇼핑", "T커머스", "데이터홈쇼핑"],
+    "policy": ["홈쇼핑 재승인", "송출수수료", "과기정통부 홈쇼핑", "방송통신위원회 홈쇼핑", "공정거래위원회 유통"],
+    "ecommerce": ["쿠팡", "네이버쇼핑", "알리익스프레스", "테무", "라이브커머스", "이커머스"],
+    "risk": ["홈쇼핑 방송사고", "홈쇼핑 소송", "홈쇼핑 뒷광고", "사망여우"]
+  },
+  "tabRules": {
+    "retail": { "keywords": ["유통", "백화점", "대형마트", "이마트", "편의점", "면세점", "리테일"] },
+    "homeshopping": { "keywords": ["홈쇼핑", "T커머스", "데이터홈쇼핑", "라이브방송"] },
+    "policy": { "keywords": ["재승인", "재허가", "송출수수료", "과기정통부", "과학기술정보통신부", "방통위", "방송통신위원회", "공정위", "공정거래위원회", "방송법", "전자상거래법", "규제", "국정감사"] },
+    "ecommerce": { "keywords": ["쿠팡", "네이버쇼핑", "알리익스프레스", "알리바바", "테무", "11번가", "G마켓", "SSG닷컴", "라이브커머스", "이커머스", "오픈마켓", "그립", "카카오쇼핑라이브"] }
+  },
+  "riskCategories": [
+    { "id": "reapproval", "name": "재승인·인허가", "weight": 2, "keywords": ["재승인", "조건부 승인", "승인 취소", "재허가"] },
+    { "id": "legal", "name": "법무·소송", "weight": 2, "keywords": ["소송", "고소", "고발", "기소", "검찰", "압수수색", "과징금", "시정명령", "배임", "횡령", "공정위 제재"] },
+    { "id": "broadcast", "name": "방송사고·심의", "weight": 3, "keywords": ["방송사고", "방송 중단", "송출 중단", "심의 제재", "방심위", "방송통신심의위원회", "허위과장", "허위·과장", "욕설", "막말"] },
+    { "id": "ad", "name": "뒷광고·PPL", "weight": 2, "keywords": ["뒷광고", "PPL", "협찬 미표기", "기만 광고", "기만광고"] },
+    { "id": "expose", "name": "폭로·이슈", "weight": 3, "keywords": ["사망여우", "폭로", "논란", "불매"] },
+    { "id": "consumer", "name": "소비자 피해", "weight": 2, "keywords": ["환불 거부", "소비자 피해", "리콜", "판매 중단", "판매중단", "이물질", "유해물질", "허위 후기"] },
+    { "id": "safety", "name": "안전·재해", "weight": 3, "keywords": ["화재", "사망사고", "사망자", "중대재해", "산재"] },
+    { "id": "privacy", "name": "정보보호", "weight": 2, "keywords": ["개인정보 유출", "해킹", "전산 장애", "전산장애"] }
+  ],
+  "trending": { "windowHours": 24, "baselineHours": 72, "minCount": 3, "topN": 20 }
+}
