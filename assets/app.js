@@ -14,6 +14,8 @@
     selectedCompanies: new Set(),
     selectedRiskCats: new Set(),
     query: "",
+    matchScope: "all",   // all | title | body
+    sortOrder: "latest", // latest | risk
     bookmarks: loadBookmarks(),
   };
 
@@ -48,9 +50,25 @@
   window.addEventListener("hashchange", route);
   $search.addEventListener("input", () => {
     state.query = $search.value.trim();
+    updateSearchClear();
     render();
   });
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+  document.getElementById("searchClear").addEventListener("click", clearSearch);
+  document.getElementById("modalClose").addEventListener("click", closeModal);
+  document.getElementById("modalBackdrop").addEventListener("click", closeModal);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+  function clearSearch() {
+    $search.value = "";
+    state.query = "";
+    updateSearchClear();
+    render();
+  }
+
+  function updateSearchClear() {
+    document.getElementById("searchClear").hidden = !state.query;
+  }
 
   function fetchJson(path) {
     return fetch(path, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -93,10 +111,35 @@
       arts = arts.filter((a) =>
         (a.title + " " + (a.description || "")).toLowerCase().includes(q));
     }
+    if (state.activeTab === "homeshopping" && state.matchScope !== "all") {
+      arts = arts.filter((a) => {
+        const terms = matchTermsFor(a);
+        if (!terms.length) return false;
+        const inTitle = terms.some((t) => a.title.includes(t));
+        if (state.matchScope === "title") return inTitle;
+        return !inTitle && terms.some((t) => (a.description || "").includes(t));
+      });
+    }
     if (state.activeTab === "risk") {
+      arts = arts.slice().sort((x, y) => (y.riskScore - x.riskScore) || cmpDate(x, y));
+    } else if (state.activeTab === "homeshopping" && state.sortOrder === "risk") {
       arts = arts.slice().sort((x, y) => (y.riskScore - x.riskScore) || cmpDate(x, y));
     }
     return arts;
+  }
+
+  // 매칭 범위 필터의 기준 검색어: 검색어 > 선택한 회사의 별칭 > 기사에 태깅된 회사의 별칭
+  function matchTermsFor(article) {
+    if (state.query) return [state.query];
+    const ids = state.selectedCompanies.size
+      ? [...state.selectedCompanies]
+      : (article.companies || []);
+    const terms = [];
+    ids.forEach((id) => {
+      const c = state.config.companies.find((x) => x.id === id);
+      if (c) terms.push(c.name, ...(c.aliases || []));
+    });
+    return terms;
   }
 
   function cmpDate(x, y) {
@@ -114,11 +157,28 @@
     if (state.activeTab === "homeshopping" || state.activeTab === "risk") {
       html += renderSlicers();
     }
+    if (state.activeTab === "homeshopping") {
+      html += renderFilterBar();
+    }
     const arts = filterArticles();
     html += renderArticleList(arts);
     $main.innerHTML = html;
     bindArticleEvents();
     bindChipEvents();
+  }
+
+  function renderFilterBar() {
+    const ms = state.matchScope, so = state.sortOrder;
+    return `<div class="filter-bar">
+      <span class="filter-label">매칭</span>
+      ${chip("ms:all", "전체", ms === "all", "")}
+      ${chip("ms:title", "제목 포함", ms === "title", "")}
+      ${chip("ms:body", "본문만", ms === "body", "")}
+      <span class="filter-sep"></span>
+      <span class="filter-label">정렬</span>
+      ${chip("so:latest", "최신순", so === "latest", "")}
+      ${chip("so:risk", "리스크순", so === "risk", "")}
+    </div>`;
   }
 
   function renderSlicers() {
@@ -190,6 +250,7 @@
     }).join("");
     const marked = !!state.bookmarks[a.id];
     const url = a.link || a.originallink || "#";
+    const press = a.press || pressFromUrl(a.originallink || a.link);
     return `<article class="article-card ${riskClass}">
       <div class="article-body">
         <div class="article-title"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a></div>
@@ -198,8 +259,23 @@
           <span>${formatRelative(a.pubDate)}</span>${companies}${risks}
         </div>
       </div>
-      <button class="bookmark-btn${marked ? " on" : ""}" data-id="${a.id}" title="스크랩">${marked ? "★" : "☆"}</button>
+      <div class="article-side">
+        <button class="bookmark-btn${marked ? " on" : ""}" data-id="${a.id}" title="스크랩">${marked ? "★" : "☆"}</button>
+        ${press ? `<span class="press">${escapeHtml(press)}</span>` : ""}
+        <span class="date">${formatDate(a.pubDate)}</span>
+      </div>
     </article>`;
+  }
+
+  // 수집기 press 백필 전 데이터 대비: 원문 도메인으로 즉석 판별 (매핑 없이 도메인 표시)
+  function pressFromUrl(url) {
+    if (!url) return "";
+    try {
+      let host = new URL(url).hostname.replace(/^(www|m|news|mnews|view|mobile)\./, "");
+      return host === "n.news.naver.com" || host === "naver.com" ? "네이버뉴스" : host;
+    } catch (e) {
+      return "";
+    }
   }
 
   /* ---------------- 대시보드 ---------------- */
@@ -251,13 +327,40 @@
     $main.innerHTML = html;
     bindArticleEvents();
     document.querySelectorAll(".trend-chip").forEach((el) => {
-      el.addEventListener("click", () => {
-        $search.value = el.dataset.kw;
-        state.query = el.dataset.kw;
-        location.hash = "#/retail";
-      });
+      el.addEventListener("click", () => openKeywordModal(el.dataset.kw));
     });
   }
+
+  /* ---------------- 모달 (대시보드 팝업) ---------------- */
+
+  let modalKeyword = "";
+
+  function openKeywordModal(kw) {
+    modalKeyword = kw;
+    const matched = state.articles.filter((a) =>
+      (a.title + " " + (a.description || "")).includes(kw)).slice(0, 50);
+    document.getElementById("modalTitle").textContent = `"${kw}" 관련 기사 ${matched.length}건`;
+    document.getElementById("modalBody").innerHTML = matched.length
+      ? `<div class="article-list">${matched.map(renderCard).join("")}</div>`
+      : '<div class="empty-state">관련 기사가 없습니다.</div>';
+    document.getElementById("modal").hidden = false;
+    document.body.style.overflow = "hidden";
+    bindArticleEvents(document.getElementById("modalBody"));
+  }
+
+  function closeModal() {
+    document.getElementById("modal").hidden = true;
+    document.body.style.overflow = "";
+  }
+
+  document.getElementById("modalGoTab").addEventListener("click", () => {
+    closeModal();
+    $search.value = modalKeyword;
+    state.query = modalKeyword;
+    updateSearchClear();
+    location.hash = "#/retail";
+    render();
+  });
 
   /* ---------------- 이벤트 ---------------- */
 
@@ -269,6 +372,8 @@
         else if (key === "rc-all") state.selectedRiskCats.clear();
         else if (key.startsWith("co:")) toggleSet(state.selectedCompanies, key.slice(3));
         else if (key.startsWith("rc:")) toggleSet(state.selectedRiskCats, key.slice(3));
+        else if (key.startsWith("ms:")) state.matchScope = key.slice(3);
+        else if (key.startsWith("so:")) state.sortOrder = key.slice(3);
         render();
       });
     });
@@ -278,8 +383,17 @@
     set.has(v) ? set.delete(v) : set.add(v);
   }
 
-  function bindArticleEvents() {
-    document.querySelectorAll(".bookmark-btn").forEach((el) => {
+  function formatDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const now = new Date();
+    const mmdd = `${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+    const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    return d.getFullYear() === now.getFullYear() ? `${mmdd} ${hhmm}` : `${d.getFullYear()}.${mmdd}`;
+  }
+
+  function bindArticleEvents(root) {
+    (root || $main).querySelectorAll(".bookmark-btn").forEach((el) => {
       el.addEventListener("click", () => {
         const id = el.dataset.id;
         if (state.bookmarks[id]) {
@@ -291,6 +405,7 @@
         saveBookmarks();
         updateScrapCount();
         render();
+        if (!document.getElementById("modal").hidden) openKeywordModal(modalKeyword);
       });
     });
   }
