@@ -14,7 +14,10 @@
       <h1 class="logo">📺 hdnews</h1>
       <span class="updated-at" id="updatedAt"></span>
       <div class="header-actions">
-        <input type="search" id="searchInput" class="search-input" placeholder="키워드 검색 (전체 기사)" autocomplete="off">
+        <div class="search-wrap">
+          <input type="search" id="searchInput" class="search-input" placeholder="키워드 검색 (전체 기사)" autocomplete="off">
+          <button id="searchClear" class="search-clear" title="검색 초기화" hidden>✕</button>
+        </div>
         <button id="themeToggle" class="icon-btn" title="다크/라이트 전환">🌙</button>
       </div>
     </div>
@@ -36,6 +39,20 @@
   <footer class="site-footer">
     <p>네이버 뉴스 검색 API · 구글뉴스 RSS 기반 자동 수집 · 30분 주기 갱신</p>
   </footer>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <span id="modalTitle"></span>
+        <div class="modal-head-actions">
+          <button id="modalGoTab" class="modal-link-btn">유통 종합에서 검색 →</button>
+          <button id="modalClose" class="icon-btn" title="닫기">✕</button>
+        </div>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
 
   <script src="assets/app.js"></script>
 </body>

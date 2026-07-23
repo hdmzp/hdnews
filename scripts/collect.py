@@ -76,6 +76,40 @@ def parse_pubdate(s):
         return None
 
 
+_PRESS_MAP = None
+
+
+def press_map():
+    global _PRESS_MAP
+    if _PRESS_MAP is None:
+        _PRESS_MAP = load_json(os.path.join(ROOT, "config", "press.json"),
+                               {"domains": {}})["domains"]
+    return _PRESS_MAP
+
+
+def derive_press(url):
+    """기사 URL 도메인으로 언론사명 판별. 미등록 도메인은 도메인 그대로 반환."""
+    if not url:
+        return ""
+    try:
+        host = urllib.parse.urlparse(url).netloc.lower().split(":")[0]
+    except ValueError:
+        return ""
+    domains = press_map()
+    # 원본 호스트 정확 일치 우선 (biz.chosun.com처럼 접두어 자체가 매체 구분인 경우)
+    if host in domains:
+        return domains[host]
+    host = re.sub(r"^(www|m|news|mnews|v|view|biz1?|media|mobile)\.", "", host)
+    if host in domains:
+        return domains[host]
+    parts = host.split(".")
+    for i in range(1, len(parts) - 1):
+        cand = ".".join(parts[i:])
+        if cand in domains:
+            return domains[cand]
+    return host
+
+
 def load_json(path, default):
     try:
         with open(path, encoding="utf-8") as f:
@@ -127,13 +161,15 @@ def fetch_naver(query, client_id, client_secret):
         title = clean_text(it.get("title", ""))
         if not title:
             continue
+        originallink = it.get("originallink", "")
         out.append({
             "title": title,
             "description": clean_text(it.get("description", ""))[:DESC_MAX],
             "link": it.get("link", ""),
-            "originallink": it.get("originallink", ""),
+            "originallink": originallink,
             "pubDate": parse_pubdate(it.get("pubDate", "")),
             "source": "naver",
+            "press": derive_press(originallink or it.get("link", "")),
         })
     return out
 
@@ -169,6 +205,7 @@ def fetch_google(query):
             "originallink": "",
             "pubDate": parse_pubdate(item.findtext("pubDate") or ""),
             "source": "google",
+            "press": press,
         })
     return out
 
@@ -370,6 +407,10 @@ def run():
     existing_data = load_json(os.path.join(DATA_DIR, "articles.json"),
                               {"articles": []})
     existing = existing_data.get("articles", [])
+    # press 필드 도입 이전에 수집된 기사 백필
+    for a in existing:
+        if not a.get("press"):
+            a["press"] = derive_press(a.get("originallink") or a.get("link", ""))
 
     naver_queries, google_queries = build_queries(config)
     batches, ok, fail = [], 0, 0
@@ -433,6 +474,11 @@ def selftest():
     assert clean_text("<b>홈쇼핑</b> &quot;대박&quot;") == '홈쇼핑 "대박"'
     assert normalize_title("[단독] 홈앤쇼핑, 쿠롤 완판!") == normalize_title("홈앤쇼핑 쿠롤 완판")
     assert parse_pubdate("Wed, 23 Jul 2026 10:30:00 +0900").startswith("2026-07-23T10:30")
+    assert derive_press("https://www.chosun.com/economy/1") == "조선일보"
+    assert derive_press("https://biz.chosun.com/it/2") == "조선비즈"
+    assert derive_press("https://news.mk.co.kr/v2/3") == "매일경제"
+    assert derive_press("https://n.news.naver.com/article/x") == "네이버뉴스"
+    assert derive_press("https://unknown-press.co.kr/a") == "unknown-press.co.kr"
     assert article_id("http://a.com/1", "") == article_id("http://a.com/1", "x")
 
     art = {"title": "홈앤쇼핑서 구혜선이 쿠롤 판매", "description": ""}
