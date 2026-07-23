@@ -272,6 +272,7 @@
     if (!url) return "";
     try {
       let host = new URL(url).hostname.replace(/^(www|m|news|mnews|view|mobile)\./, "");
+      if (host === "google.com" || host.endsWith(".google.com")) return "";
       return host === "n.news.naver.com" || host === "naver.com" ? "네이버뉴스" : host;
     } catch (e) {
       return "";
