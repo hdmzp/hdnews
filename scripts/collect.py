@@ -102,6 +102,9 @@ def derive_press(url):
     host = re.sub(r"^(www|m|news|mnews|v|view|biz1?|media|mobile)\.", "", host)
     if host in domains:
         return domains[host]
+    # 구글뉴스 리다이렉트 링크는 언론사 정보가 아님
+    if host == "google.com" or host.endswith(".google.com"):
+        return ""
     parts = host.split(".")
     for i in range(1, len(parts) - 1):
         cand = ".".join(parts[i:])
@@ -407,9 +410,9 @@ def run():
     existing_data = load_json(os.path.join(DATA_DIR, "articles.json"),
                               {"articles": []})
     existing = existing_data.get("articles", [])
-    # press 필드 도입 이전에 수집된 기사 백필
+    # press 필드 도입 이전에 수집된 기사 백필 (잘못 채워진 구글 도메인도 정정)
     for a in existing:
-        if not a.get("press"):
+        if not a.get("press") or a["press"] in ("google.com", "news.google.com"):
             a["press"] = derive_press(a.get("originallink") or a.get("link", ""))
 
     naver_queries, google_queries = build_queries(config)
