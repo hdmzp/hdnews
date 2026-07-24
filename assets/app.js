@@ -308,6 +308,9 @@
     const url = a.link || a.originallink || "#";
     const press = a.press || pressFromUrl(a.originallink || a.link);
     const rankBadge = rank ? `<div class="rank-badge">${String(rank).padStart(2, "0")}<span class="rank-dot"></span></div>` : "";
+    const thumb = a.image
+      ? `<a class="thumb-wrap" href="${escapeAttr(url)}" target="_blank" rel="noopener"><img class="thumb" src="${escapeAttr(a.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.style.display='none'"></a>`
+      : "";
     return `<article class="article-card ${riskClass}${rank ? " ranked" : ""}">
       ${rankBadge}
       <div class="article-body">
@@ -317,6 +320,7 @@
           <span>${formatRelative(a.pubDate)}</span>${heat}${companies}${risks}
         </div>
       </div>
+      ${thumb}
       <div class="article-side">
         <button class="bookmark-btn${marked ? " on" : ""}" data-id="${a.id}" title="스크랩">${marked ? "★" : "☆"}</button>
         ${press ? `<span class="press">${escapeHtml(press)}</span>` : ""}
