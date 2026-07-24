@@ -318,6 +318,15 @@ def aggregate(articles, config):
     }
 
 
+def hot_ranking(articles, top_n=10):
+    """hotScore(보도량 heat + riskScore) 내림차순, 동점 시 최신순 TOP N id."""
+    ranked = sorted(articles,
+                    key=lambda a: (a.get("heat", 1) + a.get("riskScore", 0),
+                                   a["pubDate"] or ""),
+                    reverse=True)
+    return [a["id"] for a in ranked[:top_n]]
+
+
 def compute_briefing(articles, trending, config, now):
     today = now.date()
     def within(a, start):
@@ -325,11 +334,19 @@ def compute_briefing(articles, trending, config, now):
     daily_arts = [a for a in articles
                   if a["pubDate"] and datetime.fromisoformat(a["pubDate"]).date() == today]
     weekly_arts = [a for a in articles if within(a, now - timedelta(days=7))]
+    day24_arts = [a for a in articles if within(a, now - timedelta(hours=24))]
     daily = aggregate(daily_arts, config)
     daily["date"] = today.isoformat()
     daily["topTrending"] = [k["keyword"] for k in trending["keywords"][:5]]
     weekly = aggregate(weekly_arts, config)
-    return {"generatedAt": now.isoformat(), "daily": daily, "weekly": weekly}
+    return {
+        "generatedAt": now.isoformat(),
+        "daily": daily,
+        "weekly": weekly,
+        "hotRetail": hot_ranking(day24_arts),
+        "hotHomeshopping": hot_ranking(
+            [a for a in day24_arts if "homeshopping" in a.get("tabs", [])]),
+    }
 
 
 # ---------------------------------------------------------------- 파이프라인
@@ -349,9 +366,15 @@ def build_queries(config):
 
 
 def merge_articles(existing, fetched_batches, config, now):
-    """기존 + 신규 병합. 반환: (전체 리스트, 신규 건수)."""
+    """기존 + 신규 병합. 전재 중복은 버리지 않고 대표 기사의 heat(보도량)로 누적.
+
+    반환: (전체 리스트, 신규 건수).
+    """
     by_id = {a["id"]: a for a in existing}
-    seen_titles = {normalize_title(a["title"]) for a in existing}
+    title_owner = {}  # 정규화 제목 → 대표 기사 id
+    for a in existing:
+        a.setdefault("heat", 1)
+        title_owner.setdefault(normalize_title(a["title"]), a["id"])
     new_count = 0
     for batch in fetched_batches:
         for raw in batch:
@@ -359,13 +382,16 @@ def merge_articles(existing, fetched_batches, config, now):
             if aid in by_id:
                 continue
             norm = normalize_title(raw["title"])
-            if norm and norm in seen_titles:
+            if norm and norm in title_owner:
+                by_id[title_owner[norm]]["heat"] += 1
                 continue
             raw["id"] = aid
             raw["collectedAt"] = now.isoformat()
+            raw["heat"] = 1
             tag_article(raw, config)
             by_id[aid] = raw
-            seen_titles.add(norm)
+            if norm:
+                title_owner[norm] = aid
             new_count += 1
     merged = sorted(by_id.values(), key=lambda a: a["pubDate"] or "", reverse=True)
     return merged, new_count
@@ -517,8 +543,18 @@ def selftest():
          "originallink": "http://x/1", "pubDate": iso(now), "source": "naver"},
         {"title": "GS샵 신기록", "description": "", "link": "http://google/redirect",
          "originallink": "", "pubDate": iso(now), "source": "google"},
+        {"title": "GS샵 신기록", "description": "", "link": "http://y/2",
+         "originallink": "http://y/2", "pubDate": iso(now), "source": "naver"},
     ]], config, now)
     assert n == 1 and merged[0]["source"] == "naver", merged
+    assert merged[0]["heat"] == 3, merged  # 전재 2건이 heat로 누적
+
+    hot = hot_ranking([
+        {"id": "a", "heat": 5, "riskScore": 0, "pubDate": iso(now)},
+        {"id": "b", "heat": 2, "riskScore": 5, "pubDate": iso(now)},
+        {"id": "c", "heat": 1, "riskScore": 0, "pubDate": iso(now)},
+    ])
+    assert hot == ["b", "a", "c"], hot
 
     keep, expired = apply_retention([
         {"id": "new", "pubDate": iso(now)},

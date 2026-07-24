@@ -82,7 +82,6 @@ a { color: inherit; text-decoration: none; }
   border-bottom: 2.5px solid transparent; color: var(--text-sub);
 }
 .tab-bar a.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
-.tab-bar a.tab-risk.active { color: var(--risk-high); border-bottom-color: var(--risk-high); }
 .scrap-count { font-size: 0.75rem; color: var(--accent); }
 
 /* ================= 본문 ================= */
@@ -161,6 +160,25 @@ main { max-width: 1080px; margin: 0 auto; padding: 16px; }
   padding: 1px 8px; border-radius: 999px; font-weight: 600;
 }
 .meta-chip.risk { background: rgba(220, 38, 38, 0.1); color: var(--risk-high); }
+.meta-chip.heat { background: rgba(217, 119, 6, 0.12); color: var(--risk-mid); }
+
+/* ================= 핫이슈 랭킹 ================= */
+.hot-list { margin-bottom: 18px; }
+.article-card.ranked { padding-left: 12px; }
+.rank-badge {
+  flex-shrink: 0; width: 34px; font-size: 1.15rem; font-weight: 800;
+  color: var(--text); letter-spacing: 0.02em; line-height: 1.2;
+  position: relative;
+}
+.rank-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--badge-bg); vertical-align: top; margin: 2px 0 0 2px;
+}
+.company-summary summary { cursor: pointer; list-style: none; }
+.company-summary summary::-webkit-details-marker { display: none; }
+.company-summary summary::after { content: " ▾"; color: var(--text-sub); font-size: 0.8rem; }
+.company-summary[open] summary::after { content: " ▴"; }
+.company-summary .company-bars { margin: 4px 0 14px; }
 .bookmark-btn {
   border: none; background: none; cursor: pointer;
   font-size: 1.15rem; color: var(--text-sub); padding: 2px;
