@@ -1,4 +1,4 @@
-/* hdnews 프론트엔드 — 의존성 없는 순수 JS SPA */
+/* hdnews 프론트엔드 — 의존성 없는 순수 JS SPA (3탭: 유통 핫이슈 / 홈쇼핑 이슈 / 스크랩) */
 (function () {
   "use strict";
 
@@ -10,7 +10,7 @@
     trending: { keywords: [] },
     briefing: null,
     config: { companies: [], riskCategories: [] },
-    activeTab: "dashboard",
+    activeTab: "retail",
     selectedCompanies: new Set(),
     selectedRiskCats: new Set(),
     query: "",
@@ -77,9 +77,10 @@
   /* ---------------- 라우팅 ---------------- */
 
   function route() {
-    const tab = (location.hash.replace(/^#\//, "") || "dashboard");
-    const valid = ["dashboard", "retail", "homeshopping", "risk", "policy", "ecommerce", "scrap"];
-    state.activeTab = valid.includes(tab) ? tab : "dashboard";
+    const tab = (location.hash.replace(/^#\//, "") || "retail");
+    const valid = ["retail", "homeshopping", "scrap"];
+    // 구버전 해시(#/dashboard, #/risk, #/policy, #/ecommerce)는 유통 핫이슈로
+    state.activeTab = valid.includes(tab) ? tab : "retail";
     document.querySelectorAll(".tab-bar a").forEach((a) => {
       a.classList.toggle("active", a.dataset.tab === state.activeTab);
     });
@@ -92,19 +93,18 @@
     let arts;
     if (state.activeTab === "scrap") {
       arts = Object.values(state.bookmarks);
-    } else if (state.activeTab === "dashboard" || state.activeTab === "retail") {
-      arts = state.articles;
+    } else if (state.activeTab === "homeshopping") {
+      arts = state.articles.filter((a) => a.tabs && a.tabs.includes("homeshopping"));
     } else {
-      arts = state.articles.filter((a) => a.tabs && a.tabs.includes(state.activeTab));
+      arts = state.articles;
     }
-    if (state.activeTab === "homeshopping" && state.selectedCompanies.size) {
-      arts = arts.filter((a) => a.companies && a.companies.some((c) => state.selectedCompanies.has(c)));
-    }
-    if (state.activeTab === "risk" && state.selectedRiskCats.size) {
-      arts = arts.filter((a) => a.riskCategories && a.riskCategories.some((c) => state.selectedRiskCats.has(c)));
-    }
-    if (state.activeTab === "risk" && state.selectedCompanies.size) {
-      arts = arts.filter((a) => a.companies && a.companies.some((c) => state.selectedCompanies.has(c)));
+    if (state.activeTab === "homeshopping") {
+      if (state.selectedCompanies.size) {
+        arts = arts.filter((a) => a.companies && a.companies.some((c) => state.selectedCompanies.has(c)));
+      }
+      if (state.selectedRiskCats.size) {
+        arts = arts.filter((a) => a.riskCategories && a.riskCategories.some((c) => state.selectedRiskCats.has(c)));
+      }
     }
     if (state.query) {
       const q = state.query.toLowerCase();
@@ -120,9 +120,7 @@
         return !inTitle && terms.some((t) => (a.description || "").includes(t));
       });
     }
-    if (state.activeTab === "risk") {
-      arts = arts.slice().sort((x, y) => (y.riskScore - x.riskScore) || cmpDate(x, y));
-    } else if (state.activeTab === "homeshopping" && state.sortOrder === "risk") {
+    if (state.activeTab === "homeshopping" && state.sortOrder === "risk") {
       arts = arts.slice().sort((x, y) => (y.riskScore - x.riskScore) || cmpDate(x, y));
     }
     return arts;
@@ -149,23 +147,80 @@
   /* ---------------- 렌더 ---------------- */
 
   function render() {
-    if (state.activeTab === "dashboard" && !state.query) {
-      renderDashboard();
-      return;
-    }
     let html = "";
-    if (state.activeTab === "homeshopping" || state.activeTab === "risk") {
-      html += renderSlicers();
+    const searching = !!state.query;
+    if (state.activeTab === "retail" && !searching) {
+      html += renderTrendingStrip();
+      html += renderHotSection("hotRetail", "🔥 오늘의 유통 핫이슈 TOP 10");
+      html += '<div class="dash-section-title">🕐 최신 기사</div>';
     }
     if (state.activeTab === "homeshopping") {
+      if (!searching) {
+        html += renderHsSummary();
+        html += renderHotSection("hotHomeshopping", "🔥 오늘의 홈쇼핑 핫이슈 TOP 10");
+      }
+      html += renderSlicers();
       html += renderFilterBar();
     }
-    const arts = filterArticles();
-    html += renderArticleList(arts);
+    html += renderArticleList(filterArticles());
     $main.innerHTML = html;
     bindArticleEvents();
     bindChipEvents();
+    document.querySelectorAll(".trend-chip").forEach((el) => {
+      el.addEventListener("click", () => openKeywordModal(el.dataset.kw));
+    });
   }
+
+  /* ----- 유통 핫이슈: 급상승 키워드 스트립 ----- */
+
+  function renderTrendingStrip() {
+    if (!state.trending.keywords.length) return "";
+    let html = '<div class="dash-section-title">📈 급상승 키워드</div><div class="trend-list">';
+    html += state.trending.keywords.slice(0, 12).map((k, i) =>
+      `<span class="trend-chip" data-kw="${escapeAttr(k.keyword)}"><span class="rank">${i + 1}</span>${escapeHtml(k.keyword)}<span class="cnt">${k.count}건</span></span>`
+    ).join("");
+    return html + "</div>";
+  }
+
+  /* ----- 핫이슈 TOP 10 랭킹 ----- */
+
+  function renderHotSection(key, title) {
+    const ids = (state.briefing && state.briefing[key]) || [];
+    const arts = ids.map((id) => state.articles.find((a) => a.id === id)).filter(Boolean);
+    if (!arts.length) return "";
+    let html = `<div class="dash-section-title">${title}</div><div class="article-list hot-list">`;
+    html += arts.map((a, i) => renderCard(a, i + 1)).join("");
+    return html + "</div>";
+  }
+
+  /* ----- 홈쇼핑 이슈: 요약 섹션 (구 대시보드 흡수) ----- */
+
+  function renderHsSummary() {
+    const b = state.briefing && state.briefing.daily;
+    if (!b) return "";
+    const riskCnt = (b.byTab && b.byTab.risk) || 0;
+    const hsCnt = (b.byTab && b.byTab.homeshopping) || 0;
+    let html = `<div class="dash-grid hs-grid">
+      <div class="dash-card"><div class="num">${b.total}</div><div class="label">오늘 수집 기사</div></div>
+      <div class="dash-card"><div class="num">${hsCnt}</div><div class="label">홈쇼핑 기사</div></div>
+      <div class="dash-card"><div class="num risk">${riskCnt}</div><div class="label">오늘 리스크 기사</div></div>
+      <div class="dash-card"><div class="num">${state.briefing.weekly ? state.briefing.weekly.total : "-"}</div><div class="label">주간 누적 기사</div></div>
+    </div>`;
+    const byCo = b.byCompany || {};
+    const riskByCo = b.riskByCompany || {};
+    const max = Math.max(1, ...Object.values(byCo));
+    html += '<details class="company-summary"><summary class="dash-section-title">🏢 회사별 오늘 기사</summary><div class="company-bars">';
+    state.config.companies.forEach((c) => {
+      const n = byCo[c.id] || 0;
+      const w = Math.round((n / max) * 100);
+      html += `<div class="company-bar-row"><span class="name">${c.name}</span>
+        <span class="bar" style="width:${w * 0.6}%"></span><span>${n}</span>
+        ${riskByCo[c.id] ? `<span class="risk-mark">⚠ ${riskByCo[c.id]}</span>` : ""}</div>`;
+    });
+    return html + "</div></details>";
+  }
+
+  /* ----- 필터 바 / 슬라이서 ----- */
 
   function renderFilterBar() {
     const ms = state.matchScope, so = state.sortOrder;
@@ -185,14 +240,6 @@
     let html = "";
     const today = new Date().toISOString().slice(0, 10);
     const recentRisk = companyRiskSet();
-    if (state.activeTab === "risk") {
-      html += '<div class="chip-group"><div class="chip-group-label">리스크 유형</div><div class="chip-row">';
-      html += chip("rc-all", "전체", !state.selectedRiskCats.size, "");
-      state.config.riskCategories.forEach((rc) => {
-        html += chip("rc:" + rc.id, rc.name, state.selectedRiskCats.has(rc.id), "");
-      });
-      html += "</div></div>";
-    }
     const groups = { "TV홈쇼핑": [], "T커머스": [] };
     state.config.companies.forEach((c) => (groups[c.type] || (groups[c.type] = [])).push(c));
     html += '<div class="chip-group"><div class="chip-group-label">홈쇼핑사</div><div class="chip-row">';
@@ -206,6 +253,12 @@
           (recentRisk.has(c.id) ? '<span class="risk-dot" title="최근 48시간 내 리스크 기사"></span>' : "");
         html += chip("co:" + c.id, c.name, state.selectedCompanies.has(c.id), extra);
       });
+    });
+    html += "</div></div>";
+    html += '<div class="chip-group"><div class="chip-group-label">리스크 유형</div><div class="chip-row">';
+    html += chip("rc-all", "전체", !state.selectedRiskCats.size, "");
+    state.config.riskCategories.forEach((rc) => {
+      html += chip("rc:" + rc.id, rc.name, state.selectedRiskCats.has(rc.id), "");
     });
     html += "</div></div>";
     return html;
@@ -226,6 +279,8 @@
     return set;
   }
 
+  /* ----- 기사 리스트 / 카드 ----- */
+
   function renderArticleList(arts) {
     if (!arts.length) {
       const msg = state.activeTab === "scrap"
@@ -233,12 +288,12 @@
         : "조건에 맞는 기사가 없습니다.";
       return `<div class="empty-state">${msg}</div>`;
     }
-    const items = arts.slice(0, 300).map(renderCard).join("");
+    const items = arts.slice(0, 300).map((a) => renderCard(a)).join("");
     const more = arts.length > 300 ? `<div class="empty-state">외 ${arts.length - 300}건 — 검색으로 좁혀보세요.</div>` : "";
     return `<div class="article-list">${items}</div>${more}`;
   }
 
-  function renderCard(a) {
+  function renderCard(a, rank) {
     const riskClass = a.riskScore >= 3 ? "risk-3" : a.riskScore === 2 ? "risk-2" : a.riskScore === 1 ? "risk-1" : "";
     const companies = (a.companies || []).map((id) => {
       const c = state.config.companies.find((x) => x.id === id);
@@ -248,15 +303,18 @@
       const rc = state.config.riskCategories.find((x) => x.id === id);
       return rc ? `<span class="meta-chip risk">${rc.name}</span>` : "";
     }).join("");
+    const heat = a.heat > 1 ? `<span class="meta-chip heat">보도 ${a.heat}건</span>` : "";
     const marked = !!state.bookmarks[a.id];
     const url = a.link || a.originallink || "#";
     const press = a.press || pressFromUrl(a.originallink || a.link);
-    return `<article class="article-card ${riskClass}">
+    const rankBadge = rank ? `<div class="rank-badge">${String(rank).padStart(2, "0")}<span class="rank-dot"></span></div>` : "";
+    return `<article class="article-card ${riskClass}${rank ? " ranked" : ""}">
+      ${rankBadge}
       <div class="article-body">
         <div class="article-title"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a></div>
         ${a.description ? `<div class="article-desc">${escapeHtml(a.description)}</div>` : ""}
         <div class="article-meta">
-          <span>${formatRelative(a.pubDate)}</span>${companies}${risks}
+          <span>${formatRelative(a.pubDate)}</span>${heat}${companies}${risks}
         </div>
       </div>
       <div class="article-side">
@@ -267,7 +325,7 @@
     </article>`;
   }
 
-  // 수집기 press 백필 전 데이터 대비: 원문 도메인으로 즉석 판별 (매핑 없이 도메인 표시)
+  // 수집기 press 백필 전 데이터 대비: 원문 도메인으로 즉석 판별
   function pressFromUrl(url) {
     if (!url) return "";
     try {
@@ -279,60 +337,7 @@
     }
   }
 
-  /* ---------------- 대시보드 ---------------- */
-
-  function renderDashboard() {
-    const b = state.briefing && state.briefing.daily;
-    if (!b || !state.articles.length) {
-      $main.innerHTML = '<div class="empty-state">아직 수집된 기사가 없습니다.<br>GitHub Actions에서 "Collect news" 워크플로를 실행해 주세요.</div>';
-      return;
-    }
-    const riskCnt = (b.byTab && b.byTab.risk) || 0;
-    const hsCnt = (b.byTab && b.byTab.homeshopping) || 0;
-    let html = `<div class="dash-grid">
-      <div class="dash-card"><div class="num">${b.total}</div><div class="label">오늘 수집 기사</div></div>
-      <div class="dash-card"><div class="num">${hsCnt}</div><div class="label">홈쇼핑 기사</div></div>
-      <div class="dash-card"><div class="num risk">${riskCnt}</div><div class="label">오늘 리스크 기사</div></div>
-      <div class="dash-card"><div class="num">${state.briefing.weekly ? state.briefing.weekly.total : "-"}</div><div class="label">주간 누적 기사</div></div>
-    </div>`;
-
-    html += '<div class="dash-section-title">🔥 급상승 키워드</div>';
-    if (state.trending.keywords.length) {
-      html += '<div class="trend-list">' + state.trending.keywords.slice(0, 20).map((k, i) =>
-        `<span class="trend-chip" data-kw="${escapeAttr(k.keyword)}"><span class="rank">${i + 1}</span>${escapeHtml(k.keyword)}<span class="cnt">${k.count}건</span></span>`
-      ).join("") + "</div>";
-    } else {
-      html += '<div class="empty-state" style="padding:16px">수집 24시간 후부터 표시됩니다.</div>';
-    }
-
-    html += '<div class="dash-section-title">🏢 회사별 오늘 기사</div><div class="company-bars">';
-    const byCo = b.byCompany || {};
-    const riskByCo = b.riskByCompany || {};
-    const max = Math.max(1, ...Object.values(byCo));
-    state.config.companies.forEach((c) => {
-      const n = byCo[c.id] || 0;
-      const w = Math.round((n / max) * 100);
-      html += `<div class="company-bar-row"><span class="name">${c.name}</span>
-        <span class="bar" style="width:${w * 0.6}%"></span><span>${n}</span>
-        ${riskByCo[c.id] ? `<span class="risk-mark">⚠ ${riskByCo[c.id]}</span>` : ""}</div>`;
-    });
-    html += "</div>";
-
-    const topRisk = (b.topRiskArticleIds || [])
-      .map((id) => state.articles.find((a) => a.id === id)).filter(Boolean);
-    if (topRisk.length) {
-      html += '<div class="dash-section-title">⚠️ 오늘의 주요 리스크</div>';
-      html += `<div class="article-list">${topRisk.map(renderCard).join("")}</div>`;
-    }
-
-    $main.innerHTML = html;
-    bindArticleEvents();
-    document.querySelectorAll(".trend-chip").forEach((el) => {
-      el.addEventListener("click", () => openKeywordModal(el.dataset.kw));
-    });
-  }
-
-  /* ---------------- 모달 (대시보드 팝업) ---------------- */
+  /* ---------------- 모달 (키워드 팝업) ---------------- */
 
   let modalKeyword = "";
 
@@ -342,7 +347,7 @@
       (a.title + " " + (a.description || "")).includes(kw)).slice(0, 50);
     document.getElementById("modalTitle").textContent = `"${kw}" 관련 기사 ${matched.length}건`;
     document.getElementById("modalBody").innerHTML = matched.length
-      ? `<div class="article-list">${matched.map(renderCard).join("")}</div>`
+      ? `<div class="article-list">${matched.map((a) => renderCard(a)).join("")}</div>`
       : '<div class="empty-state">관련 기사가 없습니다.</div>';
     document.getElementById("modal").hidden = false;
     document.body.style.overflow = "hidden";
