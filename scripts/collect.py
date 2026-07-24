@@ -22,6 +22,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
@@ -36,6 +37,14 @@ GOOGLE_RSS_URL = "https://news.google.com/rss/search"
 RETENTION_DAYS = 7
 DESC_MAX = 200
 RISK_SCORE_CAP = 5
+IMAGE_FETCH_CAP = 150      # 런당 og:image 조회 상한
+IMAGE_FETCH_WORKERS = 10
+IMAGE_FETCH_TIMEOUT = 5
+
+OG_IMAGE_RE = re.compile(
+    r'<meta[^>]+(?:property|name)=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']'
+    r'|<meta[^>]+content=["\']([^"\']+)["\'][^>]*(?:property|name)=["\']og:image["\']',
+    re.IGNORECASE)
 
 TAG_RE = re.compile(r"<[^>]+>")
 # 제목 정규화: [단독]/【속보】/(종합) 류 접두어와 문장부호 제거
@@ -211,6 +220,61 @@ def fetch_google(query):
             "press": press,
         })
     return out
+
+
+# ---------------------------------------------------------------- 썸네일(og:image)
+
+def extract_og_image(html_text):
+    m = OG_IMAGE_RE.search(html_text)
+    if not m:
+        return ""
+    url = (m.group(1) or m.group(2) or "").strip()
+    url = html.unescape(url)
+    return url if url.startswith(("http://", "https://")) else ""
+
+
+def fetch_og_image(url):
+    """기사 페이지에서 og:image URL 추출. 실패 시 빈 문자열."""
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; hdnews-collector)"})
+        with urllib.request.urlopen(req, timeout=IMAGE_FETCH_TIMEOUT) as resp:
+            head = resp.read(65536).decode("utf-8", "ignore")
+        return extract_og_image(head)
+    except Exception:
+        return ""
+
+
+def image_target_url(article):
+    """og:image를 조회할 URL. 구글 리다이렉트 링크는 페이지 파싱이 불가해 제외."""
+    link = article.get("link", "")
+    if "news.naver.com" in link:
+        return link
+    orig = article.get("originallink", "")
+    if orig:
+        return orig
+    return "" if "news.google.com" in link else link
+
+
+def enrich_images(articles, now):
+    """최근 24시간 기사 중 image가 없는 것부터 화제성 순으로 og:image 조회."""
+    cutoff = now - timedelta(hours=24)
+    candidates = [a for a in articles
+                  if "image" not in a
+                  and a.get("pubDate") and datetime.fromisoformat(a["pubDate"]) >= cutoff
+                  and image_target_url(a)]
+    candidates.sort(key=lambda a: a.get("heat", 1) + a.get("riskScore", 0), reverse=True)
+    candidates = candidates[:IMAGE_FETCH_CAP]
+    if not candidates:
+        return 0
+    with ThreadPoolExecutor(max_workers=IMAGE_FETCH_WORKERS) as pool:
+        images = pool.map(lambda a: fetch_og_image(image_target_url(a)), candidates)
+    found = 0
+    for a, img in zip(candidates, images):
+        a["image"] = img  # 실패해도 빈 값으로 기록해 매 런 재시도하지 않음
+        if img:
+            found += 1
+    return found
 
 
 # ---------------------------------------------------------------- 태깅
@@ -471,6 +535,7 @@ def run():
         return 1
 
     merged, new_count = merge_articles(existing, batches, config, now)
+    img_count = enrich_images(merged, now)
     merged, expired = apply_retention(merged, now)
     if expired:
         archive_expired(expired)
@@ -489,7 +554,7 @@ def run():
     write_json(os.path.join(DATA_DIR, "briefing.json"), briefing)
 
     print(f"완료: 쿼리 성공 {ok} / 실패 {fail}, 신규 {new_count}건, "
-          f"보관 {len(merged)}건, 아카이브 {len(expired)}건")
+          f"썸네일 {img_count}건, 보관 {len(merged)}건, 아카이브 {len(expired)}건")
     return 0
 
 
@@ -521,6 +586,12 @@ def selftest():
     assert "risk" in art2["tabs"] and "policy" in art2["tabs"]
     assert "reapproval" in art2["riskCategories"] and "legal" in art2["riskCategories"]
     assert art2["riskScore"] == RISK_SCORE_CAP  # 2+2+3(논란) → 캡 5
+
+    assert extract_og_image('<meta property="og:image" content="https://img.x.com/a.jpg"/>') == "https://img.x.com/a.jpg"
+    assert extract_og_image('<meta content="https://img.x.com/b.jpg" property="og:image">') == "https://img.x.com/b.jpg"
+    assert extract_og_image('<meta property="og:image" content="/relative.jpg">') == ""
+    assert image_target_url({"link": "https://n.news.naver.com/a/1", "originallink": "https://x.com/1"}).startswith("https://n.news")
+    assert image_target_url({"link": "https://news.google.com/rss/articles/x", "originallink": ""}) == ""
 
     stop = {"홈쇼핑"}
     toks = extract_tokens("홈쇼핑 송출수수료는 인상", stop)

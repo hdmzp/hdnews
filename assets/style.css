@@ -132,6 +132,12 @@ main { max-width: 1080px; margin: 0 auto; padding: 16px; }
   border-radius: 10px; padding: 13px 15px; box-shadow: var(--shadow);
   display: flex; gap: 10px;
 }
+.thumb-wrap { flex-shrink: 0; align-self: center; }
+.thumb {
+  width: 92px; height: 74px; object-fit: cover; border-radius: 10px;
+  display: block; background: var(--chip-bg);
+}
+.article-card.ranked .thumb { width: 104px; height: 84px; }
 .article-side {
   display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
   flex-shrink: 0; min-width: 86px; text-align: right;
@@ -253,4 +259,7 @@ main { max-width: 1080px; margin: 0 auto; padding: 16px; }
   .search-input { width: 150px; }
   .dash-grid { grid-template-columns: repeat(2, 1fr); }
   .company-bar-row .name { width: 90px; font-size: 0.78rem; }
+  .thumb, .article-card.ranked .thumb { width: 76px; height: 62px; }
+  .article-side { min-width: 62px; }
+  .article-side .press { max-width: 80px; }
 }
