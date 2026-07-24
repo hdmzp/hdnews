@@ -313,18 +313,21 @@
       : "";
     return `<article class="article-card ${riskClass}${rank ? " ranked" : ""}">
       ${rankBadge}
-      <div class="article-body">
-        <div class="article-title"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a></div>
-        ${a.description ? `<div class="article-desc">${escapeHtml(a.description)}</div>` : ""}
-        <div class="article-meta">
-          <span>${formatRelative(a.pubDate)}</span>${heat}${companies}${risks}
+      <div class="card-main">
+        <div class="card-row">
+          <div class="article-body">
+            <div class="article-title"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a></div>
+            ${a.description ? `<div class="article-desc">${escapeHtml(a.description)}</div>` : ""}
+          </div>
+          ${thumb}
         </div>
-      </div>
-      ${thumb}
-      <div class="article-side">
-        <button class="bookmark-btn${marked ? " on" : ""}" data-id="${a.id}" title="스크랩">${marked ? "★" : "☆"}</button>
-        ${press ? `<span class="press">${escapeHtml(press)}</span>` : ""}
-        <span class="date">${formatDate(a.pubDate)}</span>
+        <div class="article-footer">
+          ${press ? `<span class="press">${escapeHtml(press)}</span><span class="dot">·</span>` : ""}
+          <span class="date" title="${escapeAttr(a.pubDate || "")}">${formatDate(a.pubDate)}</span>
+          <span class="rel">(${formatRelative(a.pubDate)})</span>
+          ${heat}${companies}${risks}
+          <button class="bookmark-btn${marked ? " on" : ""}" data-id="${a.id}" title="스크랩">${marked ? "★" : "☆"}</button>
+        </div>
       </div>
     </article>`;
   }
