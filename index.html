@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>hdnews — 유통·홈쇼핑 뉴스 모니터링</title>
   <meta name="description" content="유통 업계와 홈쇼핑 12개사의 뉴스·리스크를 한눈에 모니터링">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📰</text></svg>">
-  <link rel="stylesheet" href="assets/style.css?v=13">
+  <link rel="icon" type="image/svg+xml" href="assets/news-icon.svg">
+  <link rel="stylesheet" href="assets/style.css?v=14">
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
+      <div class="logo-icon"><img src="assets/news-icon.svg" alt="hdnews"></div>
       <nav class="side-nav">
         <a href="#/retail" data-tab="retail"><span class="nav-emoji">🔥</span>유통 NEWS</a>
         <a href="#/homeshopping" data-tab="homeshopping"><span class="nav-emoji">🛍️</span>홈쇼핑 NEWS</a>
@@ -25,6 +26,7 @@
     <div class="content">
       <header class="site-header">
         <div class="header-row">
+          <img class="logo-mobile" src="assets/news-icon.svg" alt="hdnews">
           <span class="updated-at" id="updatedAt"></span>
           <div class="header-actions">
             <div class="search-wrap">
@@ -65,6 +67,6 @@
     </div>
   </div>
 
-  <script src="assets/app.js?v=13"></script>
+  <script src="assets/app.js?v=14"></script>
 </body>
 </html>
