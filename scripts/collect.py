@@ -66,10 +66,13 @@ def clean_text(s):
 
 
 def normalize_title(title):
-    """전재 기사 중복 판정용 제목 정규화."""
+    """전재 기사 중복 판정용 제목 정규화.
+
+    말줄임(…)으로 잘린 제목도 같은 기사로 잡히도록 앞 24자만 사용.
+    """
     t = BRACKET_RE.sub("", title)
     t = PUNCT_RE.sub("", t)
-    return t.lower()
+    return t.lower()[:24]
 
 
 def article_id(originallink, link):
@@ -280,17 +283,21 @@ def enrich_images(articles, now):
 # ---------------------------------------------------------------- 태깅
 
 def tag_article(art, config):
-    """companies / tabs / riskCategories / riskScore 필드를 채운다."""
+    """companies / tabs / riskCategories / riskScore / noise 필드를 채운다."""
     text = art["title"] + " " + art["description"]
+    # 엔터테인먼트 등 노이즈 기사: 랭킹·홈쇼핑 태그에서 제외 (기사 자체는 유지)
+    noise = any(kw in art["title"] for kw in config.get("excludeKeywords", []))
     companies = [c["id"] for c in config["companies"]
                  if any(alias in text for alias in c["aliases"])]
     tabs = ["retail"]
     for tab, rule in config["tabRules"].items():
-        if tab == "retail":
+        if tab in ("retail", "homeshopping"):
             continue
         if any(kw in text for kw in rule["keywords"]):
             tabs.append(tab)
-    if companies and "homeshopping" not in tabs:
+    # 홈쇼핑 태그: 회사명 매칭 또는 홈쇼핑 키워드가 '제목'에 등장해야 부여
+    hs_kw = config["tabRules"].get("homeshopping", {}).get("keywords", [])
+    if not noise and (companies or any(kw in art["title"] for kw in hs_kw)):
         tabs.append("homeshopping")
     risk_cats, score = [], 0
     for cat in config["riskCategories"]:
@@ -300,7 +307,8 @@ def tag_article(art, config):
     score = min(score, RISK_SCORE_CAP)
     if score >= 1:
         tabs.append("risk")
-    art.update(companies=companies, tabs=tabs, riskCategories=risk_cats, riskScore=score)
+    art.update(companies=companies, tabs=tabs, riskCategories=risk_cats,
+               riskScore=score, noise=noise)
     return art
 
 
@@ -383,8 +391,11 @@ def aggregate(articles, config):
 
 
 def hot_ranking(articles, top_n=10):
-    """hotScore(보도량 heat + riskScore) 내림차순, 동점 시 최신순 TOP N id."""
-    ranked = sorted(articles,
+    """hotScore(보도량 heat + riskScore) 내림차순, 동점 시 최신순 TOP N id.
+
+    노이즈(엔터테인먼트 등) 기사는 랭킹에서 제외.
+    """
+    ranked = sorted((a for a in articles if not a.get("noise")),
                     key=lambda a: (a.get("heat", 1) + a.get("riskScore", 0),
                                    a["pubDate"] or ""),
                     reverse=True)
@@ -504,6 +515,8 @@ def run():
     for a in existing:
         if not a.get("press") or a["press"] in ("google.com", "news.google.com"):
             a["press"] = derive_press(a.get("originallink") or a.get("link", ""))
+        # 분류 규칙이 바뀌어도 기존 기사에 최신 규칙이 적용되도록 매 런 재태깅
+        tag_article(a, config)
 
     naver_queries, google_queries = build_queries(config)
     batches, ok, fail = [], 0, 0
@@ -579,6 +592,20 @@ def selftest():
     tag_article(art, config)
     assert art["companies"] == ["hns"], art
     assert "homeshopping" in art["tabs"] and art["riskScore"] == 0
+
+    # 본문에만 '홈쇼핑'이 언급된 예능 기사 → 홈쇼핑 태그 제외
+    ent = {"title": "'살림남2' 은가은·박현호 축의금 갈등", "description": "방송에서 홈쇼핑 판매 장면이 나왔다."}
+    tag_article(ent, config)
+    assert ent["noise"] is True and "homeshopping" not in ent["tabs"], ent
+    ent2 = {"title": "특가 화제", "description": "홈쇼핑 관련 언급"}
+    tag_article(ent2, config)
+    assert "homeshopping" not in ent2["tabs"], ent2  # 제목에 홈쇼핑 키워드 없음
+    assert hot_ranking([{"id": "n", "noise": True, "heat": 99, "riskScore": 5, "pubDate": "2026"},
+                        {"id": "k", "heat": 1, "riskScore": 0, "pubDate": "2026"}]) == ["k"]
+
+    # 말줄임으로 잘린 전재 제목도 중복 판정
+    assert normalize_title("숏폼 마케팅에 꽂힌 홈쇼핑업계 어쩌고 저쩌고 국면 [류은혁의 기획]") == \
+           normalize_title("숏폼 마케팅에 꽂힌 홈쇼핑업계 어쩌고 저쩌고 국면...")
 
     art2 = {"title": "롯데홈쇼핑 재승인 심사서 과징금 논란", "description": ""}
     tag_article(art2, config)
