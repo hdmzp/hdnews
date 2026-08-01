@@ -289,14 +289,17 @@
   /* ----- 홈쇼핑 이슈: 회사별 오늘 기사 요약 (클릭 시 해당 회사 피드로 이동) ----- */
 
   function renderCompanyToday() {
-    const b = state.briefing && state.briefing.daily;
+    const b = state.briefing && state.briefing.weekly;
     if (!b) return "";
     const byCo = b.byCompany || {};
     const riskByCo = b.riskByCompany || {};
     const max = Math.max(1, ...Object.values(byCo));
     const open = localStorage.getItem("hdnews.companyOpen") !== "0";
+    const end = state.briefing.generatedAt ? new Date(state.briefing.generatedAt) : new Date();
+    const start = new Date(end.getTime() - 6 * 24 * 3600 * 1000);
+    const ymd = (d) => `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
     let html = `<details class="company-summary" id="companyToday"${open ? " open" : ""}>
-      <summary class="dash-section-title">🏢 회사별 오늘 기사</summary><div class="company-bars">`;
+      <summary class="dash-section-title">🏢 회사별 최근 기사 (7일, ${ymd(start)}~${ymd(end)})</summary><div class="company-bars">`;
     state.config.companies.forEach((c) => {
       const n = byCo[c.id] || 0;
       const w = Math.round((n / max) * 100);
@@ -406,14 +409,12 @@
 
   function renderSlicers() {
     let html = "";
-    const today = new Date().toISOString().slice(0, 10);
     const recentRisk = companyRiskSet();
     const groups = { "TV홈쇼핑": [], "T커머스": [] };
     state.config.companies.forEach((c) => (groups[c.type] || (groups[c.type] = [])).push(c));
     const companyChips = (cos, emoji) => cos.map((c) => {
       const cnt = state.articles.filter((a) =>
-        a.companies && a.companies.includes(c.id) &&
-        (a.pubDate || "").slice(0, 10) === today).length;
+        a.companies && a.companies.includes(c.id)).length;
       const extra = (cnt ? `<span class="cnt">${cnt}</span>` : "") +
         (recentRisk.has(c.id) ? '<span class="risk-dot" title="최근 48시간 내 리스크 기사"></span>' : "");
       return chip("co:" + c.id, `${emoji} ${c.name}`, state.selectedCompanies.has(c.id), extra);
