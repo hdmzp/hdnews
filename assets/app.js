@@ -131,9 +131,12 @@
       arts = arts.filter((a) => a.pubDate && new Date(a.pubDate).getTime() >= cutoff);
     }
     if (state.query) {
-      const q = state.query.toLowerCase();
-      arts = arts.filter((a) =>
-        (a.title + " " + (a.description || "")).toLowerCase().includes(q));
+      // 공백으로 나눈 모든 단어가 포함되면 매칭 (구절 키워드 대응)
+      const parts = state.query.toLowerCase().split(/\s+/).filter(Boolean);
+      arts = arts.filter((a) => {
+        const text = (a.title + " " + (a.description || "")).toLowerCase();
+        return parts.every((p) => text.includes(p));
+      });
     }
     if (state.activeTab === "homeshopping" && state.matchScope !== "all") {
       arts = arts.filter((a) => {
@@ -512,8 +515,11 @@
 
   function openKeywordModal(kw) {
     modalKeyword = kw;
-    const matched = state.articles.filter((a) =>
-      (a.title + " " + (a.description || "")).includes(kw)).slice(0, 50);
+    const parts = kw.split(/\s+/).filter(Boolean);
+    const matched = state.articles.filter((a) => {
+      const text = a.title + " " + (a.description || "");
+      return parts.every((p) => text.includes(p));
+    }).slice(0, 50);
     document.getElementById("modalTitle").textContent = `"${kw}" 관련 기사 ${matched.length}건`;
     document.getElementById("modalBody").innerHTML = matched.length
       ? `<div class="article-list">${matched.map((a) => renderCard(a)).join("")}</div>`
