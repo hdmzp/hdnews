@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>hdnews — 유통·홈쇼핑 뉴스 모니터링</title>
   <meta name="description" content="유통 업계와 홈쇼핑 12개사의 뉴스·리스크를 한눈에 모니터링">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>">
-  <link rel="stylesheet" href="assets/style.css?v=10">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📰</text></svg>">
+  <link rel="stylesheet" href="assets/style.css?v=11">
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
-      <div class="logo" aria-label="hdnews">📺</div>
       <nav class="side-nav">
-        <a href="#/retail" data-tab="retail"><span class="nav-emoji">🔥</span>유통 핫이슈</a>
-        <a href="#/homeshopping" data-tab="homeshopping"><span class="nav-emoji">📺</span>홈쇼핑 이슈</a>
+        <a href="#/retail" data-tab="retail"><span class="nav-emoji">🔥</span>유통 NEWS</a>
+        <a href="#/homeshopping" data-tab="homeshopping"><span class="nav-emoji">🛍️</span>홈쇼핑 NEWS</a>
         <a href="#/scrap" data-tab="scrap"><span class="nav-emoji">⭐</span>스크랩 <span class="scrap-count"></span></a>
       </nav>
+      <div class="side-stats" id="sideStats"></div>
       <div class="sidebar-footer">
         <p>네이버 뉴스 API · 구글뉴스 RSS<br>30분 주기 자동 수집</p>
       </div>
@@ -25,7 +25,6 @@
     <div class="content">
       <header class="site-header">
         <div class="header-row">
-          <div class="logo logo-mobile" aria-label="hdnews">📺</div>
           <span class="updated-at" id="updatedAt"></span>
           <div class="header-actions">
             <div class="search-wrap">
@@ -36,8 +35,8 @@
           </div>
         </div>
         <nav class="tab-bar" id="tabBar">
-          <a href="#/retail" data-tab="retail">유통 핫이슈</a>
-          <a href="#/homeshopping" data-tab="homeshopping">홈쇼핑 이슈</a>
+          <a href="#/retail" data-tab="retail">유통 NEWS</a>
+          <a href="#/homeshopping" data-tab="homeshopping">홈쇼핑 NEWS</a>
           <a href="#/scrap" data-tab="scrap">스크랩 <span class="scrap-count"></span></a>
         </nav>
       </header>
@@ -66,6 +65,6 @@
     </div>
   </div>
 
-  <script src="assets/app.js?v=10"></script>
+  <script src="assets/app.js?v=11"></script>
 </body>
 </html>
