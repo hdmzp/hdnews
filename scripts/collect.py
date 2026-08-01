@@ -282,18 +282,30 @@ def enrich_images(articles, now):
 
 # ---------------------------------------------------------------- 태깅
 
+def from_excluded_domain(art, domains):
+    """연예·스포츠 섹션/전문 매체 도메인 기사 여부."""
+    for url in (art.get("link", ""), art.get("originallink", "")):
+        if not url:
+            continue
+        try:
+            host = urllib.parse.urlparse(url).netloc.lower().split(":")[0]
+        except ValueError:
+            continue
+        if any(host == d or host.endswith("." + d) for d in domains):
+            return True
+    return False
+
+
 def tag_article(art, config):
-    """companies / tabs / riskCategories / riskScore / noise 필드를 채운다."""
-    text = art["title"] + " " + art["description"]
+    """companies / rcompanies / tabs / 유형 / riskScore / noise 필드를 채운다."""
+    text = art["title"] + " " + art.get("description", "")
     companies = [c["id"] for c in config["companies"]
                  if any(alias in text for alias in c["aliases"])]
+    rcompanies = [c["id"] for c in config.get("retailCompanies", [])
+                  if any(alias in text for alias in c["aliases"])]
     # 홈쇼핑 관련: 회사명 매칭 또는 홈쇼핑 키워드가 '제목'에 등장
     hs_kw = config["tabRules"].get("homeshopping", {}).get("keywords", [])
     hs_related = bool(companies) or any(kw in art["title"] for kw in hs_kw)
-    # 엔터테인먼트 등 노이즈 기사: 랭킹·홈쇼핑 태그에서 제외 (기사 자체는 유지)
-    # 단, 홈쇼핑 관련 기사는 연예 키워드가 있어도 유지 (예: 배우의 홈쇼핑 완판 소식)
-    noise = (not hs_related
-             and any(kw in art["title"] for kw in config.get("excludeKeywords", [])))
     tabs = ["retail"]
     for tab, rule in config["tabRules"].items():
         if tab in ("retail", "homeshopping"):
@@ -312,8 +324,23 @@ def tag_article(art, config):
         tabs.append("risk")
     general_cats = [cat["id"] for cat in config.get("generalCategories", [])
                     if any(kw in text for kw in cat["keywords"])]
-    art.update(companies=companies, tabs=tabs, riskCategories=risk_cats,
-               categories=general_cats, riskScore=score, noise=noise)
+    # 노이즈 판정 (랭킹·홈쇼핑 태그·피드·트렌딩에서 제외, 검색으로는 조회 가능)
+    # ① 연예·스포츠 섹션/매체 기사는 무조건 노이즈 (홈쇼핑 언급이 있어도 연예 홍보성)
+    # ② 연예 키워드 기사: 홈쇼핑 관련이면 예외적으로 유지
+    # ③ 어떤 회사·유통 키워드·유형에도 매칭되지 않으면 관련성 없음 → 노이즈
+    retail_kw = config["tabRules"].get("retail", {}).get("keywords", [])
+    relevant = (companies or rcompanies or risk_cats or general_cats
+                or len(tabs) > 1
+                or any(kw in text for kw in retail_kw))
+    noise = (from_excluded_domain(art, config.get("excludeDomains", []))
+             or (not hs_related
+                 and any(kw in art["title"] for kw in config.get("excludeKeywords", [])))
+             or not relevant)
+    if noise and "homeshopping" in tabs:
+        tabs.remove("homeshopping")
+    art.update(companies=companies, rcompanies=rcompanies, tabs=tabs,
+               riskCategories=risk_cats, categories=general_cats,
+               riskScore=score, noise=noise)
     return art
 
 
@@ -340,7 +367,7 @@ def compute_trending(articles, config, stopwords, now):
     recent, baseline = Counter(), Counter()
     recent_arts = []
     for a in articles:
-        if not a["pubDate"]:
+        if not a["pubDate"] or a.get("noise"):
             continue
         dt = datetime.fromisoformat(a["pubDate"])
         toks = set(extract_tokens(a["title"], stopwords))
@@ -618,6 +645,20 @@ def selftest():
     gen = {"title": "GS샵, 여름 특가 프로모션…신제품 출시 기념", "description": ""}
     tag_article(gen, config)
     assert "promo" in gen["categories"] and "launch" in gen["categories"], gen
+
+    # 연예 섹션 도메인 → 홈쇼핑 언급이 있어도 무조건 노이즈
+    entdom = {"title": "은가은, 홈쇼핑 완판 비화 공개", "description": "",
+              "link": "https://m.entertain.naver.com/article/408/1", "originallink": ""}
+    tag_article(entdom, config)
+    assert entdom["noise"] is True and "homeshopping" not in entdom["tabs"], entdom
+    # 어떤 유통 키워드에도 안 걸리는 기사 → 관련성 없음 노이즈
+    offtopic = {"title": "'체지방 9.2%' 박진영, 파격 의상 공개", "description": "유지비 20억 구내식당"}
+    tag_article(offtopic, config)
+    assert offtopic["noise"] is True, offtopic
+    # 유통기업 태깅
+    rc = {"title": "다이소, 초저가 화장품 매출 급증", "description": ""}
+    tag_article(rc, config)
+    assert "daiso" in rc["rcompanies"] and rc["noise"] is False, rc
 
     # 본문에만 '홈쇼핑'이 언급된 예능 기사 → 홈쇼핑 태그 제외
     ent = {"title": "'살림남2' 은가은·박현호 축의금 갈등", "description": "방송에서 홈쇼핑 판매 장면이 나왔다."}

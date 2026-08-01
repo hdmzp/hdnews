@@ -12,6 +12,7 @@
     config: { companies: [], riskCategories: [] },
     activeTab: "retail",
     selectedCompanies: new Set(),
+    selectedRetailCos: new Set(),
     selectedTypes: new Set(),   // 유형 필터 (일반 + 리스크 카테고리)
     query: "",
     matchScope: "all",   // all | title | body
@@ -100,7 +101,11 @@
     } else if (state.activeTab === "homeshopping") {
       arts = state.articles.filter((a) => a.tabs && a.tabs.includes("homeshopping"));
     } else {
-      arts = state.articles;
+      // 유통 피드: 노이즈(연예 등) 제외 — 검색 시에는 전체에서 찾기
+      arts = state.query ? state.articles : state.articles.filter((a) => !a.noise);
+      if (state.selectedRetailCos.size) {
+        arts = arts.filter((a) => a.rcompanies && a.rcompanies.some((c) => state.selectedRetailCos.has(c)));
+      }
     }
     if (state.activeTab === "homeshopping") {
       if (state.selectedCompanies.size) {
@@ -139,8 +144,15 @@
         return !inTitle && terms.some((t) => (a.description || "").includes(t));
       });
     }
-    if (state.activeTab === "homeshopping" && state.sortOrder === "risk") {
-      arts = arts.slice().sort((x, y) => (y.riskScore - x.riskScore) || cmpDate(x, y));
+    if (state.activeTab === "homeshopping") {
+      if (state.sortOrder === "risk") {
+        arts = arts.slice().sort((x, y) => (y.riskScore - x.riskScore) || cmpDate(x, y));
+      } else if (state.sortOrder === "heat") {
+        arts = arts.slice().sort((x, y) =>
+          ((y.heat || 1) + (y.riskScore || 0)) - ((x.heat || 1) + (x.riskScore || 0)) || cmpDate(x, y));
+      } else if (state.sortOrder === "oldest") {
+        arts = arts.slice().sort((x, y) => cmpDate(y, x));
+      }
     }
     return arts;
   }
@@ -172,6 +184,7 @@
       html += renderTrendingStrip(state.trending.keywords, "📈 급상승 키워드", 12);
       html += renderHotSection("hotRetail", "🔥 오늘의 유통 핫이슈 TOP 10");
       html += '<div class="dash-section-title">🕐 최신 기사</div>';
+      html += renderRetailCoSlicer();
       html += renderFilterBar(true);
     }
     if (state.activeTab === "homeshopping") {
@@ -189,6 +202,8 @@
     bindArticleEvents();
     bindChipEvents();
     bindPeriodInputs();
+    bindBarSearch();
+    restoreBarSearchFocus();
     document.querySelectorAll(".trend-chip").forEach((el) => {
       el.addEventListener("click", () => openKeywordModal(el.dataset.kw));
     });
@@ -307,13 +322,40 @@
       ${chip("ms:all", "전체", ms === "all", "")}
       ${chip("ms:title", "제목 포함", ms === "title", "")}
       ${chip("ms:body", "본문만", ms === "body", "")}
+      <input type="search" id="barSearch" class="bar-search" placeholder="키워드 검색" value="${escapeAttr(state.query)}">
       <span class="filter-sep"></span>
       <span class="filter-label">정렬</span>
       ${chip("so:latest", "최신순", so === "latest", "")}
+      ${chip("so:oldest", "오래된순", so === "oldest", "")}
+      ${chip("so:heat", "화제순", so === "heat", "")}
       ${chip("so:risk", "리스크순", so === "risk", "")}
       <span class="filter-sep"></span>
       ${renderPeriodControls()}
     </div>`;
+  }
+
+  function bindBarSearch() {
+    const el = document.getElementById("barSearch");
+    if (!el) return;
+    el.addEventListener("input", () => {
+      state.query = el.value.trim();
+      $search.value = el.value;
+      updateSearchClear();
+      barSearchFocus = true;
+      render();
+    });
+  }
+
+  let barSearchFocus = false;
+
+  function restoreBarSearchFocus() {
+    if (!barSearchFocus) return;
+    barSearchFocus = false;
+    const el = document.getElementById("barSearch");
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
   }
 
   function bindPeriodInputs() {
@@ -338,6 +380,18 @@
     promo: "🎁", launch: "🆕", marketing: "📣", broadcast_sales: "🧨",
     performance: "📊", people: "👥", partnership: "🤝", esg: "🌱",
   };
+
+  // 유통 NEWS: 유통기업 슬라이서 (작은 칩)
+  function renderRetailCoSlicer() {
+    const cos = state.config.retailCompanies || [];
+    if (!cos.length) return "";
+    let html = '<div class="chip-row chip-row-sm">';
+    html += chip("rco-all", "전체", !state.selectedRetailCos.size, "");
+    cos.forEach((c) => {
+      html += chip("rco:" + c.id, c.name, state.selectedRetailCos.has(c.id), "");
+    });
+    return html + "</div>";
+  }
 
   function renderSlicers() {
     let html = "";
@@ -490,6 +544,8 @@
       el.addEventListener("click", () => {
         const key = el.dataset.chip;
         if (key === "co-all") state.selectedCompanies.clear();
+        else if (key === "rco-all") state.selectedRetailCos.clear();
+        else if (key.startsWith("rco:")) toggleSet(state.selectedRetailCos, key.slice(4));
         else if (key === "tp-all") state.selectedTypes.clear();
         else if (key.startsWith("co:")) toggleSet(state.selectedCompanies, key.slice(3));
         else if (key.startsWith("tp:")) toggleSet(state.selectedTypes, key.slice(3));
