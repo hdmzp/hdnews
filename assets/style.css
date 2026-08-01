@@ -259,6 +259,19 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 }
 .meta-chip.risk { background: var(--orange-tint); color: var(--orange); }
 .meta-chip.heat { background: rgba(255, 100, 200, 0.12); color: var(--pink); }
+.meta-chip.cat { background: rgba(42, 157, 153, 0.12); color: var(--teal); }
+
+/* 기간 직접 선택 */
+.date-range {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.78rem; color: var(--ink-faint);
+}
+.date-range input[type="date"] {
+  border: 1px solid var(--hairline); border-radius: var(--r-xs);
+  background: var(--surface); color: var(--ink);
+  font-size: 0.78rem; padding: 4px 6px; font-family: inherit;
+}
+.date-range.active input[type="date"] { border-color: var(--primary); }
 .bookmark-btn {
   border: none; background: none; cursor: pointer;
   font-size: 1.1rem; color: var(--ink-faint); padding: 2px;

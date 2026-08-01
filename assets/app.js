@@ -12,10 +12,13 @@
     config: { companies: [], riskCategories: [] },
     activeTab: "retail",
     selectedCompanies: new Set(),
-    selectedRiskCats: new Set(),
+    selectedTypes: new Set(),   // 유형 필터 (일반 + 리스크 카테고리)
     query: "",
     matchScope: "all",   // all | title | body
     sortOrder: "latest", // latest | risk
+    periodDays: null,    // null=전체, 1/3/7=최근 N일
+    periodFrom: "",      // 직접 기간 (YYYY-MM-DD)
+    periodTo: "",
     bookmarks: loadBookmarks(),
   };
 
@@ -103,9 +106,24 @@
       if (state.selectedCompanies.size) {
         arts = arts.filter((a) => a.companies && a.companies.some((c) => state.selectedCompanies.has(c)));
       }
-      if (state.selectedRiskCats.size) {
-        arts = arts.filter((a) => a.riskCategories && a.riskCategories.some((c) => state.selectedRiskCats.has(c)));
+      if (state.selectedTypes.size) {
+        arts = arts.filter((a) =>
+          (a.riskCategories || []).some((c) => state.selectedTypes.has(c)) ||
+          (a.categories || []).some((c) => state.selectedTypes.has(c)));
       }
+    }
+    // 기간 필터 (직접 지정 우선, 없으면 최근 N일)
+    if (state.periodFrom || state.periodTo) {
+      arts = arts.filter((a) => {
+        const d = (a.pubDate || "").slice(0, 10);
+        if (!d) return false;
+        if (state.periodFrom && d < state.periodFrom) return false;
+        if (state.periodTo && d > state.periodTo) return false;
+        return true;
+      });
+    } else if (state.periodDays) {
+      const cutoff = Date.now() - state.periodDays * 24 * 3600 * 1000;
+      arts = arts.filter((a) => a.pubDate && new Date(a.pubDate).getTime() >= cutoff);
     }
     if (state.query) {
       const q = state.query.toLowerCase();
@@ -154,6 +172,7 @@
       html += renderTrendingStrip(state.trending.keywords, "📈 급상승 키워드", 12);
       html += renderHotSection("hotRetail", "🔥 오늘의 유통 핫이슈 TOP 10");
       html += '<div class="dash-section-title">🕐 최신 기사</div>';
+      html += renderFilterBar(true);
     }
     if (state.activeTab === "homeshopping") {
       if (!searching) {
@@ -169,6 +188,7 @@
     $main.innerHTML = html;
     bindArticleEvents();
     bindChipEvents();
+    bindPeriodInputs();
     document.querySelectorAll(".trend-chip").forEach((el) => {
       el.addEventListener("click", () => openKeywordModal(el.dataset.kw));
     });
@@ -264,7 +284,23 @@
 
   /* ----- 필터 바 / 슬라이서 ----- */
 
-  function renderFilterBar() {
+  function renderPeriodControls() {
+    const pd = state.periodDays, custom = !!(state.periodFrom || state.periodTo);
+    return `<span class="filter-label">기간</span>
+      ${chip("pd:all", "전체", !pd && !custom, "")}
+      ${chip("pd:1", "오늘", pd === 1 && !custom, "")}
+      ${chip("pd:3", "3일", pd === 3 && !custom, "")}
+      ${chip("pd:7", "7일", pd === 7 && !custom, "")}
+      <span class="date-range${custom ? " active" : ""}">
+        <input type="date" id="fromDate" value="${state.periodFrom}"> ~
+        <input type="date" id="toDate" value="${state.periodTo}">
+      </span>`;
+  }
+
+  function renderFilterBar(periodOnly) {
+    if (periodOnly) {
+      return `<div class="filter-bar">${renderPeriodControls()}</div>`;
+    }
     const ms = state.matchScope, so = state.sortOrder;
     return `<div class="filter-bar">
       <span class="filter-label">매칭</span>
@@ -275,13 +311,32 @@
       <span class="filter-label">정렬</span>
       ${chip("so:latest", "최신순", so === "latest", "")}
       ${chip("so:risk", "리스크순", so === "risk", "")}
+      <span class="filter-sep"></span>
+      ${renderPeriodControls()}
     </div>`;
+  }
+
+  function bindPeriodInputs() {
+    ["fromDate", "toDate"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("change", () => {
+        state.periodFrom = document.getElementById("fromDate").value;
+        state.periodTo = document.getElementById("toDate").value;
+        state.periodDays = null;
+        render();
+      });
+    });
   }
 
   const TYPE_EMOJI = { "TV홈쇼핑": "📺", "T커머스": "🛍️" };
   const RISK_EMOJI = {
     reapproval: "📋", legal: "⚖️", broadcast: "🚨", ad: "🤫",
     expose: "🔥", consumer: "🛑", safety: "⚠️", privacy: "🔒",
+  };
+  const GENERAL_EMOJI = {
+    promo: "🎁", launch: "🆕", marketing: "📣", broadcast_sales: "🧨",
+    performance: "📊", people: "👥", partnership: "🤝", esg: "🌱",
   };
 
   function renderSlicers() {
@@ -304,10 +359,13 @@
       html += companyChips(cos, TYPE_EMOJI[type] || "🏬");
       html += "</div></div>";
     });
-    html += '<div class="chip-group"><div class="chip-group-label">리스크 유형</div><div class="chip-row">';
-    html += chip("rc-all", "✨ 전체", !state.selectedRiskCats.size, "");
+    html += '<div class="chip-group"><div class="chip-group-label">유형</div><div class="chip-row">';
+    html += chip("tp-all", "✨ 전체", !state.selectedTypes.size, "");
+    (state.config.generalCategories || []).forEach((gc) => {
+      html += chip("tp:" + gc.id, `${GENERAL_EMOJI[gc.id] || "🏷️"} ${gc.name}`, state.selectedTypes.has(gc.id), "");
+    });
     state.config.riskCategories.forEach((rc) => {
-      html += chip("rc:" + rc.id, `${RISK_EMOJI[rc.id] || "🚩"} ${rc.name}`, state.selectedRiskCats.has(rc.id), "");
+      html += chip("tp:" + rc.id, `${RISK_EMOJI[rc.id] || "🚩"} ${rc.name}`, state.selectedTypes.has(rc.id), "");
     });
     html += "</div></div>";
     return html;
@@ -352,6 +410,10 @@
       const rc = state.config.riskCategories.find((x) => x.id === id);
       return rc ? `<span class="meta-chip risk">${rc.name}</span>` : "";
     }).join("");
+    const cats = (a.categories || []).slice(0, 2).map((id) => {
+      const gc = (state.config.generalCategories || []).find((x) => x.id === id);
+      return gc ? `<span class="meta-chip cat">${gc.name}</span>` : "";
+    }).join("");
     const heat = a.heat > 1 ? `<span class="meta-chip heat">보도 ${a.heat}건</span>` : "";
     const marked = !!state.bookmarks[a.id];
     const url = a.link || a.originallink || "#";
@@ -371,7 +433,7 @@
           ${press ? `<span class="press">${escapeHtml(press)}</span><span class="dot">·</span>` : ""}
           <span class="date" title="${escapeAttr(a.pubDate || "")}">${formatDate(a.pubDate)}</span>
           <span class="rel">(${formatRelative(a.pubDate)})</span>
-          ${heat}${companies}${risks}
+          ${heat}${companies}${risks}${cats}
           <button class="bookmark-btn${marked ? " on" : ""}" data-id="${a.id}" title="스크랩">${marked ? "★" : "☆"}</button>
         </div>
       </div>
@@ -428,11 +490,17 @@
       el.addEventListener("click", () => {
         const key = el.dataset.chip;
         if (key === "co-all") state.selectedCompanies.clear();
-        else if (key === "rc-all") state.selectedRiskCats.clear();
+        else if (key === "tp-all") state.selectedTypes.clear();
         else if (key.startsWith("co:")) toggleSet(state.selectedCompanies, key.slice(3));
-        else if (key.startsWith("rc:")) toggleSet(state.selectedRiskCats, key.slice(3));
+        else if (key.startsWith("tp:")) toggleSet(state.selectedTypes, key.slice(3));
         else if (key.startsWith("ms:")) state.matchScope = key.slice(3);
         else if (key.startsWith("so:")) state.sortOrder = key.slice(3);
+        else if (key.startsWith("pd:")) {
+          const v = key.slice(3);
+          state.periodDays = v === "all" ? null : Number(v);
+          state.periodFrom = "";
+          state.periodTo = "";
+        }
         render();
       });
     });
