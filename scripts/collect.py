@@ -310,8 +310,10 @@ def tag_article(art, config):
     score = min(score, RISK_SCORE_CAP)
     if score >= 1:
         tabs.append("risk")
+    general_cats = [cat["id"] for cat in config.get("generalCategories", [])
+                    if any(kw in text for kw in cat["keywords"])]
     art.update(companies=companies, tabs=tabs, riskCategories=risk_cats,
-               riskScore=score, noise=noise)
+               categories=general_cats, riskScore=score, noise=noise)
     return art
 
 
@@ -612,6 +614,10 @@ def selftest():
     tag_article(art, config)
     assert art["companies"] == ["hns"], art
     assert "homeshopping" in art["tabs"] and art["riskScore"] == 0
+
+    gen = {"title": "GS샵, 여름 특가 프로모션…신제품 출시 기념", "description": ""}
+    tag_article(gen, config)
+    assert "promo" in gen["categories"] and "launch" in gen["categories"], gen
 
     # 본문에만 '홈쇼핑'이 언급된 예능 기사 → 홈쇼핑 태그 제외
     ent = {"title": "'살림남2' 은가은·박현호 축의금 갈등", "description": "방송에서 홈쇼핑 판매 장면이 나왔다."}
