@@ -76,7 +76,8 @@ a { color: inherit; text-decoration: none; }
     background: var(--grad-ice);
     border-right: 1px solid var(--hairline);
   }
-  .sidebar .logo { padding: 0 10px 18px; font-size: 1.6rem; }
+  .sidebar .logo-icon { padding: 2px 10px 18px; }
+  .sidebar .logo-icon img { width: 48px; display: block; }
   .side-nav { display: flex; flex-direction: column; gap: 4px; }
   .side-nav a {
     display: flex; align-items: center; gap: 9px;
@@ -128,6 +129,7 @@ a { color: inherit; text-decoration: none; }
   max-width: 1080px; margin: 0 auto; padding: 12px 16px 6px;
 }
 .logo { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.5px; white-space: nowrap; }
+img.logo-mobile { width: 30px; height: auto; }
 .updated-at { font-size: 0.78rem; color: var(--ink-faint); flex: 1; }
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .search-wrap { position: relative; display: inline-flex; align-items: center; }
@@ -364,6 +366,10 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 .trend-chip:hover { border-color: var(--primary); color: var(--primary); box-shadow: var(--shadow-1); }
 .trend-chip .rank { color: var(--primary); font-weight: 700; margin-right: 5px; }
 .trend-chip .cnt { color: var(--ink-faint); font-size: 0.75rem; margin-left: 5px; }
+.company-summary summary { cursor: pointer; list-style: none; user-select: none; }
+.company-summary summary::-webkit-details-marker { display: none; }
+.company-summary summary::after { content: " ▾"; color: var(--ink-faint); font-size: 0.85rem; }
+.company-summary[open] summary::after { content: " ▴"; }
 .company-bars {
   display: flex; flex-direction: column; gap: 2px;
   background: var(--surface); border: 1px solid var(--hairline);

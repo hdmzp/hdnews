@@ -210,6 +210,12 @@
     document.querySelectorAll(".trend-chip").forEach((el) => {
       el.addEventListener("click", () => openKeywordModal(el.dataset.kw));
     });
+    const companyToday = document.getElementById("companyToday");
+    if (companyToday) {
+      companyToday.addEventListener("toggle", () => {
+        try { localStorage.setItem("hdnews.companyOpen", companyToday.open ? "1" : "0"); } catch (e) { /* 무시 */ }
+      });
+    }
     document.querySelectorAll(".company-bar-row[data-co]").forEach((el) => {
       el.addEventListener("click", () => {
         state.selectedCompanies = new Set([el.dataset.co]);
@@ -288,7 +294,9 @@
     const byCo = b.byCompany || {};
     const riskByCo = b.riskByCompany || {};
     const max = Math.max(1, ...Object.values(byCo));
-    let html = '<div class="dash-section-title">🏢 회사별 오늘 기사</div><div class="company-bars">';
+    const open = localStorage.getItem("hdnews.companyOpen") !== "0";
+    let html = `<details class="company-summary" id="companyToday"${open ? " open" : ""}>
+      <summary class="dash-section-title">🏢 회사별 오늘 기사</summary><div class="company-bars">`;
     state.config.companies.forEach((c) => {
       const n = byCo[c.id] || 0;
       const w = Math.round((n / max) * 100);
@@ -297,7 +305,7 @@
         <span class="bar" style="width:${w * 0.6}%"></span><span>${n}</span>
         ${riskByCo[c.id] ? `<span class="risk-mark">⚠ ${riskByCo[c.id]}</span>` : ""}</div>`;
     });
-    return html + "</div>";
+    return html + "</div></details>";
   }
 
   /* ----- 필터 바 / 슬라이서 ----- */
