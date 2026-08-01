@@ -255,29 +255,36 @@
     </div>`;
   }
 
+  const TYPE_EMOJI = { "TV홈쇼핑": "📺", "T커머스": "🛍️" };
+  const RISK_EMOJI = {
+    reapproval: "📋", legal: "⚖️", broadcast: "🚨", ad: "🤫",
+    expose: "🔥", consumer: "🛑", safety: "⚠️", privacy: "🔒",
+  };
+
   function renderSlicers() {
     let html = "";
     const today = new Date().toISOString().slice(0, 10);
     const recentRisk = companyRiskSet();
     const groups = { "TV홈쇼핑": [], "T커머스": [] };
     state.config.companies.forEach((c) => (groups[c.type] || (groups[c.type] = [])).push(c));
-    html += '<div class="chip-group"><div class="chip-group-label">홈쇼핑사</div><div class="chip-row">';
-    html += chip("co-all", "전체", !state.selectedCompanies.size, "");
-    Object.entries(groups).forEach(([, cos]) => {
-      cos.forEach((c) => {
-        const cnt = state.articles.filter((a) =>
-          a.companies && a.companies.includes(c.id) &&
-          (a.pubDate || "").slice(0, 10) === today).length;
-        const extra = (cnt ? `<span class="cnt">${cnt}</span>` : "") +
-          (recentRisk.has(c.id) ? '<span class="risk-dot" title="최근 48시간 내 리스크 기사"></span>' : "");
-        html += chip("co:" + c.id, c.name, state.selectedCompanies.has(c.id), extra);
-      });
+    const companyChips = (cos, emoji) => cos.map((c) => {
+      const cnt = state.articles.filter((a) =>
+        a.companies && a.companies.includes(c.id) &&
+        (a.pubDate || "").slice(0, 10) === today).length;
+      const extra = (cnt ? `<span class="cnt">${cnt}</span>` : "") +
+        (recentRisk.has(c.id) ? '<span class="risk-dot" title="최근 48시간 내 리스크 기사"></span>' : "");
+      return chip("co:" + c.id, `${emoji} ${c.name}`, state.selectedCompanies.has(c.id), extra);
+    }).join("");
+    Object.entries(groups).forEach(([type, cos], i) => {
+      html += `<div class="chip-group"><div class="chip-group-label">${type}</div><div class="chip-row">`;
+      if (i === 0) html += chip("co-all", "✨ 전체", !state.selectedCompanies.size, "");
+      html += companyChips(cos, TYPE_EMOJI[type] || "🏬");
+      html += "</div></div>";
     });
-    html += "</div></div>";
     html += '<div class="chip-group"><div class="chip-group-label">리스크 유형</div><div class="chip-row">';
-    html += chip("rc-all", "전체", !state.selectedRiskCats.size, "");
+    html += chip("rc-all", "✨ 전체", !state.selectedRiskCats.size, "");
     state.config.riskCategories.forEach((rc) => {
-      html += chip("rc:" + rc.id, rc.name, state.selectedRiskCats.has(rc.id), "");
+      html += chip("rc:" + rc.id, `${RISK_EMOJI[rc.id] || "🚩"} ${rc.name}`, state.selectedRiskCats.has(rc.id), "");
     });
     html += "</div></div>";
     return html;
@@ -330,16 +337,13 @@
     const thumb = a.image
       ? `<a class="thumb-wrap" href="${escapeAttr(url)}" target="_blank" rel="noopener"><img class="thumb" src="${escapeAttr(a.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.style.display='none'"></a>`
       : "";
+    // 카드 순서: 랭킹 번호 → 사진 → 제목/본문
     return `<article class="article-card ${riskClass}${rank ? " ranked" : ""}">
       ${rankBadge}
+      ${thumb}
       <div class="card-main">
-        <div class="card-row">
-          <div class="article-body">
-            <div class="article-title"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a></div>
-            ${a.description ? `<div class="article-desc">${escapeHtml(a.description)}</div>` : ""}
-          </div>
-          ${thumb}
-        </div>
+        <div class="article-title"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a></div>
+        ${a.description ? `<div class="article-desc">${escapeHtml(a.description)}</div>` : ""}
         <div class="article-footer">
           ${press ? `<span class="press">${escapeHtml(press)}</span><span class="dot">·</span>` : ""}
           <span class="date" title="${escapeAttr(a.pubDate || "")}">${formatDate(a.pubDate)}</span>
