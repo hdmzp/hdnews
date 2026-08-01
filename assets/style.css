@@ -28,10 +28,16 @@
               rgba(0,0,0,0.027) 0 2px 8px, rgba(0,0,0,0.04) 0 4px 18px;
   --shadow-2: rgba(0,0,0,0.05) 0 8px 24px, rgba(0,0,0,0.08) 0 23px 52px;
   --r-xs: 4px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px;
+  /* Y2K 파스텔 그라데이션 (구조는 노션, 액센트만 Y2K) */
+  --grad-y2k: linear-gradient(90deg, #ff64c8, #a78bfa, #62aef0);
+  --grad-y2k-soft: linear-gradient(120deg, rgba(255,100,200,0.14), rgba(167,139,250,0.14), rgba(98,174,240,0.16));
+  --grad-ice: linear-gradient(180deg, #f0f6ff, #fbf3fb);
 }
 [data-theme="dark"] {
   --canvas: #191919;
   --surface: #202020;
+  --grad-y2k-soft: linear-gradient(120deg, rgba(255,100,200,0.16), rgba(167,139,250,0.16), rgba(98,174,240,0.18));
+  --grad-ice: linear-gradient(180deg, #1d2129, #241d27);
   --ink: #e8e8e6;
   --ink-secondary: #cfcecb;
   --ink-muted: #9b9791;
@@ -56,6 +62,44 @@ body {
   line-height: 1.5;
 }
 a { color: inherit; text-decoration: none; }
+
+/* ================= 레이아웃 (좌측 사이드바) ================= */
+.layout { display: flex; min-height: 100vh; }
+.content { flex: 1; min-width: 0; }
+.sidebar { display: none; }
+@media (min-width: 901px) {
+  .sidebar {
+    display: flex; flex-direction: column;
+    width: 224px; flex-shrink: 0;
+    position: sticky; top: 0; height: 100vh;
+    padding: 22px 14px 18px;
+    background: var(--grad-ice);
+    border-right: 1px solid var(--hairline);
+  }
+  .sidebar .logo { padding: 0 10px 18px; font-size: 1.6rem; }
+  .side-nav { display: flex; flex-direction: column; gap: 4px; }
+  .side-nav a {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 13px; border-radius: var(--r-lg);
+    color: var(--ink-muted); font-size: 0.93rem; font-weight: 500;
+  }
+  .side-nav a:hover { background: rgba(255, 255, 255, 0.65); color: var(--ink); }
+  [data-theme="dark"] .side-nav a:hover { background: rgba(255, 255, 255, 0.06); }
+  .side-nav a.active {
+    background: var(--grad-y2k-soft); color: var(--ink); font-weight: 700;
+    box-shadow: var(--shadow-1);
+  }
+  .nav-emoji { font-size: 1.05rem; }
+  .sidebar-footer {
+    margin-top: auto; padding: 12px 10px 0;
+    font-size: 0.72rem; color: var(--ink-faint); line-height: 1.6;
+    border-top: 1px solid var(--hairline);
+  }
+  /* 데스크톱: 사이드바가 로고·탭을 담당 → 헤더에서는 숨김 */
+  .logo-mobile { display: none; }
+  .tab-bar { display: none; }
+  .site-footer { display: none; }
+}
 
 /* ================= 헤더 ================= */
 .site-header {
@@ -102,7 +146,7 @@ a { color: inherit; text-decoration: none; }
 }
 .tab-bar a:hover { background: var(--canvas); color: var(--ink); }
 .tab-bar a.active {
-  color: var(--primary); background: var(--primary-tint); font-weight: 700;
+  color: var(--ink); background: var(--grad-y2k-soft); font-weight: 700;
 }
 .scrap-count { font-size: 0.75rem; color: var(--primary); }
 
@@ -211,13 +255,12 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 .hot-list { margin-bottom: 8px; }
 .rank-badge {
   flex-shrink: 0; width: 34px; padding-top: 2px;
-  font-size: 1.25rem; font-weight: 700; letter-spacing: -0.5px;
-  color: var(--ink); line-height: 1.1;
+  font-size: 1.25rem; font-weight: 800; letter-spacing: -0.5px;
+  line-height: 1.1;
+  background: var(--grad-y2k);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.rank-dot {
-  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--pink); vertical-align: top; margin: 2px 0 0 2px;
-}
+.rank-dot { display: none; }
 
 /* ================= 요약 카드 / 회사별 집계 ================= */
 .dash-grid {
@@ -226,8 +269,16 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 }
 .dash-card {
   background: var(--surface); border: 1px solid var(--hairline);
-  border-radius: var(--r-lg); padding: 18px 20px;
+  border-radius: var(--r-lg); padding: 16px 20px 18px;
 }
+.dash-card::before {
+  content: ""; display: block; width: 46px; height: 7px;
+  border-radius: 9999px; margin-bottom: 10px; background: var(--grad-y2k);
+}
+.dash-card:nth-child(1)::before { background: linear-gradient(90deg, #ff64c8, #ff9ad9); }
+.dash-card:nth-child(2)::before { background: linear-gradient(90deg, #a78bfa, #c9b6fb); }
+.dash-card:nth-child(3)::before { background: linear-gradient(90deg, #dd5b00, #ffb37a); }
+.dash-card:nth-child(4)::before { background: linear-gradient(90deg, #62aef0, #9fd0fa); }
 .dash-card .num { font-size: 1.75rem; font-weight: 700; letter-spacing: -1px; }
 .dash-card .num.risk { color: var(--orange); }
 .dash-card .label { font-size: 0.78rem; color: var(--ink-muted); margin-top: 2px; }
@@ -254,7 +305,7 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 .company-bar-row .name { width: 110px; flex-shrink: 0; font-weight: 500; }
 .company-bar-row .bar {
   height: 10px; border-radius: 9999px; min-width: 3px;
-  background: var(--sky);
+  background: var(--grad-y2k);
 }
 .company-bar-row .risk-mark { color: var(--orange); font-size: 0.75rem; font-weight: 700; }
 
@@ -274,11 +325,11 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 }
 .modal-head-actions { display: flex; align-items: center; gap: 8px; }
 .modal-link-btn {
-  border: none; color: #fff; background: var(--primary);
+  border: none; color: #fff; background: var(--grad-y2k);
   border-radius: 9999px; padding: 7px 14px; cursor: pointer; font-size: 0.8rem;
-  font-weight: 500; white-space: nowrap;
+  font-weight: 600; white-space: nowrap;
 }
-.modal-link-btn:active { background: var(--primary-active); }
+.modal-link-btn:active { opacity: 0.85; }
 .modal-body { overflow-y: auto; padding: 14px 18px 18px; }
 
 .site-footer {

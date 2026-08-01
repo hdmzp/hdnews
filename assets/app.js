@@ -81,7 +81,7 @@
     const valid = ["retail", "homeshopping", "scrap"];
     // 구버전 해시(#/dashboard, #/risk, #/policy, #/ecommerce)는 유통 핫이슈로
     state.activeTab = valid.includes(tab) ? tab : "retail";
-    document.querySelectorAll(".tab-bar a").forEach((a) => {
+    document.querySelectorAll("a[data-tab]").forEach((a) => {
       a.classList.toggle("active", a.dataset.tab === state.activeTab);
     });
     render();
@@ -462,7 +462,9 @@
   }
   function updateScrapCount() {
     const n = Object.keys(state.bookmarks).length;
-    document.getElementById("scrapCount").textContent = n ? `(${n})` : "";
+    document.querySelectorAll(".scrap-count").forEach((el) => {
+      el.textContent = n ? `(${n})` : "";
+    });
   }
 
   /* ---------------- 테마 ---------------- */
