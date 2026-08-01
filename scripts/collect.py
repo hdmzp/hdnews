@@ -517,6 +517,17 @@ def run():
             a["press"] = derive_press(a.get("originallink") or a.get("link", ""))
         # 분류 규칙이 바뀌어도 기존 기사에 최신 규칙이 적용되도록 매 런 재태깅
         tag_article(a, config)
+    # 중복 판정 규칙 강화 이전에 저장된 근접 중복 쌍 정리 (heat는 대표 기사로 합산)
+    dedup_existing, owner = [], {}
+    for a in existing:
+        norm = normalize_title(a["title"])
+        if norm and norm in owner:
+            owner[norm]["heat"] = owner[norm].get("heat", 1) + a.get("heat", 1)
+        else:
+            if norm:
+                owner[norm] = a
+            dedup_existing.append(a)
+    existing = dedup_existing
 
     naver_queries, google_queries = build_queries(config)
     batches, ok, fail = [], 0, 0
