@@ -42,6 +42,7 @@
       $updatedAt.textContent = "마지막 업데이트 " + formatRelative(articles.generatedAt);
       $updatedAt.title = articles.generatedAt;
     }
+    renderSideStats();
     route();
   }).catch(() => {
     $main.innerHTML = '<div class="empty-state">데이터를 불러오지 못했습니다.<br>수집 워크플로가 아직 실행되지 않았을 수 있습니다.</div>';
@@ -150,7 +151,6 @@
     let html = "";
     const searching = !!state.query;
     if (state.activeTab === "retail" && !searching) {
-      html += renderSummaryCards();
       html += renderTrendingStrip(state.trending.keywords, "📈 급상승 키워드", 12);
       html += renderHotSection("hotRetail", "🔥 오늘의 유통 핫이슈 TOP 10");
       html += '<div class="dash-section-title">🕐 최신 기사</div>';
@@ -158,7 +158,7 @@
     if (state.activeTab === "homeshopping") {
       if (!searching) {
         html += renderTrendingStrip(state.trending.hsKeywords || [], "🔑 홈쇼핑 핫이슈 키워드 TOP 10", 10);
-        html += renderHotSection("hotHomeshopping", "🔥 오늘의 홈쇼핑 핫이슈 TOP 10");
+        html += renderHotCompact("hotHomeshopping", "🔥 오늘의 홈쇼핑 핫이슈 TOP 10");
         html += renderCompanyToday();
       }
       html += '<div class="dash-section-title" id="hsFeed">📚 회사별 기사 모음</div>';
@@ -193,19 +193,42 @@
     return html + "</div>";
   }
 
-  /* ----- 유통 핫이슈: 요약 카드 ----- */
+  /* ----- 사이드바 하단 요약 통계 ----- */
 
-  function renderSummaryCards() {
+  function renderSideStats() {
+    const el = document.getElementById("sideStats");
     const b = state.briefing && state.briefing.daily;
-    if (!b) return "";
+    if (!el || !b) return;
     const riskCnt = (b.byTab && b.byTab.risk) || 0;
     const hsCnt = (b.byTab && b.byTab.homeshopping) || 0;
-    return `<div class="dash-grid">
-      <div class="dash-card"><div class="num">${b.total}</div><div class="label">오늘 수집 기사</div></div>
-      <div class="dash-card"><div class="num">${hsCnt}</div><div class="label">홈쇼핑 기사</div></div>
-      <div class="dash-card"><div class="num risk">${riskCnt}</div><div class="label">오늘 리스크 기사</div></div>
-      <div class="dash-card"><div class="num">${state.briefing.weekly ? state.briefing.weekly.total : "-"}</div><div class="label">주간 누적 기사</div></div>
-    </div>`;
+    const weekly = state.briefing.weekly ? state.briefing.weekly.total : "-";
+    el.innerHTML = `
+      <div class="side-stat"><span class="stat-dot pink"></span><span class="stat-label">오늘 수집</span><b>${b.total}</b></div>
+      <div class="side-stat"><span class="stat-dot purple"></span><span class="stat-label">홈쇼핑 기사</span><b>${hsCnt}</b></div>
+      <div class="side-stat"><span class="stat-dot orange"></span><span class="stat-label">리스크 기사</span><b class="risk">${riskCnt}</b></div>
+      <div class="side-stat"><span class="stat-dot sky"></span><span class="stat-label">주간 누적</span><b>${weekly}</b></div>`;
+  }
+
+  /* ----- 홈쇼핑 TOP 10: 한 줄 뉴스 리스트 ----- */
+
+  function renderHotCompact(key, title) {
+    const ids = (state.briefing && state.briefing[key]) || [];
+    const arts = ids.map((id) => state.articles.find((a) => a.id === id)).filter(Boolean);
+    if (!arts.length) return "";
+    let html = `<div class="dash-section-title">${title}</div><div class="hot-compact">`;
+    html += arts.map((a, i) => {
+      const url = a.link || a.originallink || "#";
+      const press = a.press || pressFromUrl(a.originallink || a.link);
+      const heat = a.heat > 1 ? `<span class="meta-chip heat">보도 ${a.heat}건</span>` : "";
+      const riskDot = a.riskScore >= 1 ? '<span class="hot-risk-dot" title="리스크 기사"></span>' : "";
+      return `<a class="hot-row" href="${escapeAttr(url)}" target="_blank" rel="noopener">
+        <span class="hot-rank">${String(i + 1).padStart(2, "0")}</span>
+        <span class="hot-title">${riskDot}${escapeHtml(a.title)}</span>
+        <span class="hot-meta">${press ? escapeHtml(press) + " · " : ""}${formatDate(a.pubDate)}</span>
+        ${heat}
+      </a>`;
+    }).join("");
+    return html + "</div>";
   }
 
   /* ----- 핫이슈 TOP 10 랭킹 ----- */

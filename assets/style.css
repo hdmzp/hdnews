@@ -90,6 +90,22 @@ a { color: inherit; text-decoration: none; }
     box-shadow: var(--shadow-1);
   }
   .nav-emoji { font-size: 1.05rem; }
+  .side-stats {
+    margin-top: 18px; padding: 12px 6px 4px;
+    border-top: 1px solid var(--hairline);
+    display: flex; flex-direction: column; gap: 9px;
+  }
+  .side-stat {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.8rem; color: var(--ink-muted); padding: 0 6px;
+  }
+  .side-stat b { margin-left: auto; color: var(--ink); font-size: 0.92rem; }
+  .side-stat b.risk { color: var(--orange); }
+  .stat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .stat-dot.pink { background: linear-gradient(135deg, #ff64c8, #ff9ad9); }
+  .stat-dot.purple { background: linear-gradient(135deg, #a78bfa, #c9b6fb); }
+  .stat-dot.orange { background: linear-gradient(135deg, #dd5b00, #ffb37a); }
+  .stat-dot.sky { background: linear-gradient(135deg, #62aef0, #9fd0fa); }
   .sidebar-footer {
     margin-top: auto; padding: 12px 10px 0;
     font-size: 0.72rem; color: var(--ink-faint); line-height: 1.6;
@@ -261,6 +277,39 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .rank-dot { display: none; }
+
+/* ================= 홈쇼핑 TOP10 한 줄 리스트 ================= */
+.hot-compact {
+  background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: var(--r-lg); overflow: hidden;
+}
+.hot-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; font-size: 0.9rem;
+  border-bottom: 1px solid var(--hairline);
+}
+.hot-row:last-child { border-bottom: none; }
+.hot-row:hover { background: var(--grad-y2k-soft); }
+.hot-rank {
+  flex-shrink: 0; width: 26px; font-weight: 800; font-size: 0.95rem;
+  background: var(--grad-y2k);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hot-title {
+  flex: 1; min-width: 0; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hot-risk-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--orange); margin-right: 7px; vertical-align: middle;
+}
+.hot-meta { flex-shrink: 0; font-size: 0.74rem; color: var(--ink-faint); }
+.hot-row .meta-chip { flex-shrink: 0; }
+@media (max-width: 768px) {
+  .hot-row { flex-wrap: wrap; row-gap: 3px; padding: 9px 12px; }
+  .hot-title { flex-basis: calc(100% - 40px); }
+  .hot-meta { margin-left: 36px; }
+}
 
 /* ================= 요약 카드 / 회사별 집계 ================= */
 .dash-grid {
