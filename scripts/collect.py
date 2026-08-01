@@ -346,38 +346,78 @@ def tag_article(art, config):
 
 # ---------------------------------------------------------------- 트렌딩
 
-def extract_tokens(title, stopwords):
+UNIT_TOKEN_RE = re.compile(r"^\d+(일|월|년|시|분|초|억|만|천|원|명|개|건|호|위|살|주년|분기)$")
+
+
+def raw_tokens(title):
+    """숫자·단위·1글자를 뺀 원형 토큰 (조사 미제거)."""
+    return [t for t in TOKEN_RE.findall(title)
+            if not t.isdigit() and not UNIT_TOKEN_RE.match(t) and len(t) >= 2]
+
+
+def extract_tokens(title, stopwords, vocab=None):
+    """제목 → 정제 토큰. 조사 제거는 잘린 형태가 코퍼스에 실제 등장할 때만 적용
+    (인명 훼손 방지: 김고은 → '김고'가 따로 안 쓰이면 김고은 유지)."""
     tokens = []
-    for tok in TOKEN_RE.findall(title):
+    for tok in raw_tokens(title):
+        cand = None
         if len(tok) > 2:
             for p in TRAILING_PARTICLES:
                 if tok.endswith(p) and len(tok) - len(p) >= 2:
-                    tok = tok[: -len(p)]
+                    cand = tok[: -len(p)]
                     break
-        if tok.isdigit() or tok in stopwords or len(tok) < 2:
+        if tok in stopwords or (cand and cand in stopwords):
             continue
-        tokens.append(tok)
+        if cand and (vocab is None or vocab.get(cand, 0) > 0):
+            tokens.append(cand)
+        else:
+            tokens.append(tok)
     return tokens
 
 
-def compute_trending(articles, config, stopwords, now):
-    cfg = config["trending"]
+def title_terms(title, stopwords, vocab):
+    """기사 1건의 키워드 후보: 단어 + 인접 두 단어 구절(바이그램)."""
+    toks = extract_tokens(title, stopwords, vocab)
+    terms = set(toks)
+    terms.update(f"{a} {b}" for a, b in zip(toks, toks[1:]) if a != b)
+    return terms
+
+
+def keyword_in_title(kw, title):
+    return all(part in title for part in kw.split(" "))
+
+
+def compute_trending(articles, config, stopwords, now, window_hours=None, min_count=None):
+    cfg = dict(config["trending"])
+    if window_hours:
+        cfg["windowHours"] = window_hours
+    if min_count:
+        cfg["minCount"] = min_count
     window_start = now - timedelta(hours=cfg["windowHours"])
     baseline_start = window_start - timedelta(hours=cfg["baselineHours"])
-    recent, baseline = Counter(), Counter()
-    recent_arts = []
+    pool = []
     for a in articles:
         if not a["pubDate"] or a.get("noise"):
             continue
         dt = datetime.fromisoformat(a["pubDate"])
-        toks = set(extract_tokens(a["title"], stopwords))
+        if dt >= baseline_start:
+            pool.append((a, dt))
+    # 1패스: 원형 토큰 어휘 (조사 제거 판단용)
+    vocab = Counter()
+    for a, _ in pool:
+        vocab.update(raw_tokens(a["title"]))
+    # 2패스: 단어·구절 집계
+    recent, baseline = Counter(), Counter()
+    recent_arts = []
+    for a, dt in pool:
+        terms = title_terms(a["title"], stopwords, vocab)
         if dt >= window_start:
-            recent.update(toks)
+            recent.update(terms)
             recent_arts.append(a)
-        elif dt >= baseline_start:
-            baseline.update(toks)
+        else:
+            baseline.update(terms)
     days = cfg["baselineHours"] / 24
-    keywords = []
+    cands = []
     for kw, cnt in recent.items():
         if cnt < cfg["minCount"]:
             continue
@@ -385,18 +425,32 @@ def compute_trending(articles, config, stopwords, now):
         score = cnt - prev_avg
         if score <= 0:
             continue
-        samples = [a["id"] for a in recent_arts if kw in a["title"]][:3]
-        keywords.append({
-            "keyword": kw, "count": cnt,
-            "prevDailyAvg": round(prev_avg, 1),
-            "score": round(score, 1),
-            "sampleArticleIds": samples,
-        })
-    keywords.sort(key=lambda k: (-k["score"], -k["count"]))
+        cands.append({"keyword": kw, "count": cnt,
+                      "prevDailyAvg": round(prev_avg, 1), "score": round(score, 1)})
+    # 구절(바이그램) 우선 채택, 구절에 포함된 단어는 중복 제외
+    bigrams = sorted((c for c in cands if " " in c["keyword"]),
+                     key=lambda k: (-k["score"], -k["count"]))
+    unigrams = sorted((c for c in cands if " " not in c["keyword"]),
+                      key=lambda k: (-k["score"], -k["count"]))
+    selected, used = [], set()
+    for b in bigrams:
+        parts = b["keyword"].split(" ")
+        if any(p in used for p in parts):
+            continue
+        selected.append(b)
+        used.update(parts)
+    for u in unigrams:
+        if u["keyword"] not in used:
+            selected.append(u)
+    selected.sort(key=lambda k: (-k["score"], -k["count"]))
+    keywords = selected[: cfg["topN"]]
+    for k in keywords:
+        k["sampleArticleIds"] = [a["id"] for a in recent_arts
+                                 if keyword_in_title(k["keyword"], a["title"])][:3]
     return {
         "generatedAt": now.isoformat(),
         "windowHours": cfg["windowHours"],
-        "keywords": keywords[: cfg["topN"]],
+        "keywords": keywords,
     }
 
 
@@ -605,8 +659,10 @@ def run():
     # 홈쇼핑 전용 급상승 키워드 (홈쇼핑 태그 기사만 대상, 회사명은 키워드에서 제외)
     company_names = {alias for c in config["companies"] for alias in c["aliases"]} | \
                     {c["name"] for c in config["companies"]}
+    # 홈쇼핑 기사는 수가 적어 48시간 창·최소 2회로 완화
     hs_arts = [a for a in merged if "homeshopping" in a.get("tabs", [])]
-    hs_trending = compute_trending(hs_arts, config, stopwords | company_names, now)
+    hs_trending = compute_trending(hs_arts, config, stopwords | company_names, now,
+                                   window_hours=48, min_count=2)
     trending["hsKeywords"] = hs_trending["keywords"][:10]
     briefing = compute_briefing(merged, trending, config, now)
 
@@ -708,7 +764,18 @@ def selftest():
                  "pubDate": iso(now - timedelta(hours=50)), "companies": [],
                  "tabs": ["retail"], "riskCategories": [], "riskScore": 0})
     tr = compute_trending(arts, config, set(), now)
-    assert any(k["keyword"] == "송출수수료" for k in tr["keywords"]), tr
+    assert any("송출수수료" in k["keyword"] for k in tr["keywords"]), tr
+    # 구절(바이그램)이 채택됨 (겹치는 구절은 점수 높은 쪽 하나만)
+    assert any(" " in k["keyword"] for k in tr["keywords"]), tr
+
+    # 인명 보존: 잘린 형태(김고)가 따로 안 쓰이면 조사 제거하지 않음
+    name_arts = [{"id": f"n{i}", "title": "김고은 광고 발탁 소식", "description": "",
+                  "pubDate": iso(now - timedelta(hours=i + 1)), "companies": [],
+                  "tabs": ["retail"], "riskCategories": [], "riskScore": 0} for i in range(3)]
+    ntr = compute_trending(name_arts, config, set(), now)
+    kws = [k["keyword"] for k in ntr["keywords"]]
+    assert not any(k == "김고" for k in kws), kws
+    assert any("김고은" in k for k in kws), kws
 
     merged, n = merge_articles([], [[
         {"title": "[속보] GS샵 신기록", "description": "", "link": "http://x/1",
