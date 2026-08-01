@@ -13,6 +13,24 @@
     { "id": "wshop", "name": "W쇼핑", "type": "T커머스", "aliases": ["W쇼핑", "더블유쇼핑"] },
     { "id": "shoppingnt", "name": "쇼핑엔티", "type": "T커머스", "aliases": ["쇼핑엔티"] }
   ],
+  "retailCompanies": [
+    { "id": "lotteshopping", "name": "롯데쇼핑", "aliases": ["롯데쇼핑", "롯데마트", "롯데백화점"] },
+    { "id": "shinsegae", "name": "신세계", "aliases": ["신세계백화점", "신세계그룹", "이마트"] },
+    { "id": "hyundaidept", "name": "현대백화점", "aliases": ["현대백화점"] },
+    { "id": "homeplus", "name": "홈플러스", "aliases": ["홈플러스"] },
+    { "id": "gsretail", "name": "GS리테일", "aliases": ["GS리테일", "GS25"] },
+    { "id": "bgf", "name": "BGF리테일", "aliases": ["BGF리테일", "CU 편의점"] },
+    { "id": "costco", "name": "코스트코", "aliases": ["코스트코"] },
+    { "id": "daiso", "name": "다이소", "aliases": ["다이소"] },
+    { "id": "oliveyoung", "name": "올리브영", "aliases": ["올리브영"] },
+    { "id": "musinsa", "name": "무신사", "aliases": ["무신사"] },
+    { "id": "coupang", "name": "쿠팡", "aliases": ["쿠팡"] },
+    { "id": "aliexpress", "name": "알리·테무", "aliases": ["알리익스프레스", "테무"] },
+    { "id": "st11", "name": "11번가", "aliases": ["11번가"] },
+    { "id": "gmarket", "name": "G마켓", "aliases": ["G마켓", "지마켓"] },
+    { "id": "ssgcom", "name": "SSG닷컴", "aliases": ["SSG닷컴", "쓱닷컴"] },
+    { "id": "kurly", "name": "컬리", "aliases": ["컬리", "마켓컬리"] }
+  ],
   "topicQueries": {
     "retail": ["유통업계", "유통산업", "백화점", "대형마트", "편의점", "면세점", "아울렛", "복합쇼핑몰", "롯데쇼핑", "신세계백화점", "현대백화점", "이마트", "롯데마트", "홈플러스", "GS리테일", "BGF리테일", "코스트코", "다이소", "올리브영", "무신사", "에이블리", "패션업계", "뷰티업계"],
     "homeshopping": ["홈쇼핑", "T커머스", "데이터홈쇼핑"],
@@ -26,6 +44,14 @@
     "policy": { "keywords": ["재승인", "재허가", "송출수수료", "과기정통부", "과학기술정보통신부", "방통위", "방송통신위원회", "공정위", "공정거래위원회", "방송법", "전자상거래법", "규제", "국정감사"] },
     "ecommerce": { "keywords": ["쿠팡", "네이버쇼핑", "알리익스프레스", "알리바바", "테무", "11번가", "G마켓", "SSG닷컴", "컬리", "무신사", "에이블리", "라이브커머스", "이커머스", "오픈마켓", "그립", "카카오쇼핑라이브"] }
   },
+  "excludeDomains": [
+    "entertain.naver.com", "sports.naver.com", "enews.imbc.com",
+    "newsen.com", "osen.mt.co.kr", "mydaily.co.kr", "tvreport.co.kr",
+    "xportsnews.com", "tenasia.co.kr", "topstarnews.net", "starnewskorea.com",
+    "star.mt.co.kr", "sportsseoul.com", "sports.chosun.com", "sportsdonga.com",
+    "sports.khan.co.kr", "sports.hankooki.com", "tvdaily.co.kr", "joynews24.com",
+    "sportalkorea.com", "spotvnews.co.kr", "stardailynews.co.kr", "newsculture.press"
+  ],
   "excludeKeywords": ["드라마", "예능", "시청률", "열애", "결별", "컴백", "티저", "뮤직비디오", "콘서트", "팬미팅", "화보", "OST", "개봉", "관객수", "시사회", "종영", "살림남", "출연 확정", "캐스팅", "시상식", "앨범", "신곡", "아이돌", "걸그룹", "보이그룹", "뮤지컬", "무대인사", "팬사인회", "예고편", "본방사수", "단독샷", "레드카펫"],
   "generalCategories": [
     { "id": "promo", "name": "홍보·프로모션", "keywords": ["특가", "할인", "프로모션", "이벤트", "사은품", "쿠폰", "기획전", "역대급 혜택"] },
