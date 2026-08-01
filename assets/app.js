@@ -150,15 +150,18 @@
     let html = "";
     const searching = !!state.query;
     if (state.activeTab === "retail" && !searching) {
-      html += renderTrendingStrip();
+      html += renderSummaryCards();
+      html += renderTrendingStrip(state.trending.keywords, "📈 급상승 키워드", 12);
       html += renderHotSection("hotRetail", "🔥 오늘의 유통 핫이슈 TOP 10");
       html += '<div class="dash-section-title">🕐 최신 기사</div>';
     }
     if (state.activeTab === "homeshopping") {
       if (!searching) {
-        html += renderHsSummary();
+        html += renderTrendingStrip(state.trending.hsKeywords || [], "🔑 홈쇼핑 핫이슈 키워드 TOP 10", 10);
         html += renderHotSection("hotHomeshopping", "🔥 오늘의 홈쇼핑 핫이슈 TOP 10");
+        html += renderCompanyToday();
       }
+      html += '<div class="dash-section-title" id="hsFeed">📚 회사별 기사 모음</div>';
       html += renderSlicers();
       html += renderFilterBar();
     }
@@ -169,17 +172,40 @@
     document.querySelectorAll(".trend-chip").forEach((el) => {
       el.addEventListener("click", () => openKeywordModal(el.dataset.kw));
     });
+    document.querySelectorAll(".company-bar-row[data-co]").forEach((el) => {
+      el.addEventListener("click", () => {
+        state.selectedCompanies = new Set([el.dataset.co]);
+        render();
+        const feed = document.getElementById("hsFeed");
+        if (feed) feed.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
   }
 
-  /* ----- 유통 핫이슈: 급상승 키워드 스트립 ----- */
+  /* ----- 급상승 키워드 스트립 (유통 전체 / 홈쇼핑 전용) ----- */
 
-  function renderTrendingStrip() {
-    if (!state.trending.keywords.length) return "";
-    let html = '<div class="dash-section-title">📈 급상승 키워드</div><div class="trend-list">';
-    html += state.trending.keywords.slice(0, 12).map((k, i) =>
+  function renderTrendingStrip(keywords, title, topN) {
+    if (!keywords || !keywords.length) return "";
+    let html = `<div class="dash-section-title">${title}</div><div class="trend-list">`;
+    html += keywords.slice(0, topN).map((k, i) =>
       `<span class="trend-chip" data-kw="${escapeAttr(k.keyword)}"><span class="rank">${i + 1}</span>${escapeHtml(k.keyword)}<span class="cnt">${k.count}건</span></span>`
     ).join("");
     return html + "</div>";
+  }
+
+  /* ----- 유통 핫이슈: 요약 카드 ----- */
+
+  function renderSummaryCards() {
+    const b = state.briefing && state.briefing.daily;
+    if (!b) return "";
+    const riskCnt = (b.byTab && b.byTab.risk) || 0;
+    const hsCnt = (b.byTab && b.byTab.homeshopping) || 0;
+    return `<div class="dash-grid">
+      <div class="dash-card"><div class="num">${b.total}</div><div class="label">오늘 수집 기사</div></div>
+      <div class="dash-card"><div class="num">${hsCnt}</div><div class="label">홈쇼핑 기사</div></div>
+      <div class="dash-card"><div class="num risk">${riskCnt}</div><div class="label">오늘 리스크 기사</div></div>
+      <div class="dash-card"><div class="num">${state.briefing.weekly ? state.briefing.weekly.total : "-"}</div><div class="label">주간 누적 기사</div></div>
+    </div>`;
   }
 
   /* ----- 핫이슈 TOP 10 랭킹 ----- */
@@ -193,31 +219,24 @@
     return html + "</div>";
   }
 
-  /* ----- 홈쇼핑 이슈: 요약 섹션 (구 대시보드 흡수) ----- */
+  /* ----- 홈쇼핑 이슈: 회사별 오늘 기사 요약 (클릭 시 해당 회사 피드로 이동) ----- */
 
-  function renderHsSummary() {
+  function renderCompanyToday() {
     const b = state.briefing && state.briefing.daily;
     if (!b) return "";
-    const riskCnt = (b.byTab && b.byTab.risk) || 0;
-    const hsCnt = (b.byTab && b.byTab.homeshopping) || 0;
-    let html = `<div class="dash-grid hs-grid">
-      <div class="dash-card"><div class="num">${b.total}</div><div class="label">오늘 수집 기사</div></div>
-      <div class="dash-card"><div class="num">${hsCnt}</div><div class="label">홈쇼핑 기사</div></div>
-      <div class="dash-card"><div class="num risk">${riskCnt}</div><div class="label">오늘 리스크 기사</div></div>
-      <div class="dash-card"><div class="num">${state.briefing.weekly ? state.briefing.weekly.total : "-"}</div><div class="label">주간 누적 기사</div></div>
-    </div>`;
     const byCo = b.byCompany || {};
     const riskByCo = b.riskByCompany || {};
     const max = Math.max(1, ...Object.values(byCo));
-    html += '<details class="company-summary"><summary class="dash-section-title">🏢 회사별 오늘 기사</summary><div class="company-bars">';
+    let html = '<div class="dash-section-title">🏢 회사별 오늘 기사</div><div class="company-bars">';
     state.config.companies.forEach((c) => {
       const n = byCo[c.id] || 0;
       const w = Math.round((n / max) * 100);
-      html += `<div class="company-bar-row"><span class="name">${c.name}</span>
+      html += `<div class="company-bar-row" data-co="${c.id}" title="${c.name} 기사 보기">
+        <span class="name">${c.name}</span>
         <span class="bar" style="width:${w * 0.6}%"></span><span>${n}</span>
         ${riskByCo[c.id] ? `<span class="risk-mark">⚠ ${riskByCo[c.id]}</span>` : ""}</div>`;
     });
-    return html + "</div></details>";
+    return html + "</div>";
   }
 
   /* ----- 필터 바 / 슬라이서 ----- */

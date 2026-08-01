@@ -285,19 +285,22 @@ def enrich_images(articles, now):
 def tag_article(art, config):
     """companies / tabs / riskCategories / riskScore / noise 필드를 채운다."""
     text = art["title"] + " " + art["description"]
-    # 엔터테인먼트 등 노이즈 기사: 랭킹·홈쇼핑 태그에서 제외 (기사 자체는 유지)
-    noise = any(kw in art["title"] for kw in config.get("excludeKeywords", []))
     companies = [c["id"] for c in config["companies"]
                  if any(alias in text for alias in c["aliases"])]
+    # 홈쇼핑 관련: 회사명 매칭 또는 홈쇼핑 키워드가 '제목'에 등장
+    hs_kw = config["tabRules"].get("homeshopping", {}).get("keywords", [])
+    hs_related = bool(companies) or any(kw in art["title"] for kw in hs_kw)
+    # 엔터테인먼트 등 노이즈 기사: 랭킹·홈쇼핑 태그에서 제외 (기사 자체는 유지)
+    # 단, 홈쇼핑 관련 기사는 연예 키워드가 있어도 유지 (예: 배우의 홈쇼핑 완판 소식)
+    noise = (not hs_related
+             and any(kw in art["title"] for kw in config.get("excludeKeywords", [])))
     tabs = ["retail"]
     for tab, rule in config["tabRules"].items():
         if tab in ("retail", "homeshopping"):
             continue
         if any(kw in text for kw in rule["keywords"]):
             tabs.append(tab)
-    # 홈쇼핑 태그: 회사명 매칭 또는 홈쇼핑 키워드가 '제목'에 등장해야 부여
-    hs_kw = config["tabRules"].get("homeshopping", {}).get("keywords", [])
-    if not noise and (companies or any(kw in art["title"] for kw in hs_kw)):
+    if hs_related:
         tabs.append("homeshopping")
     risk_cats, score = [], 0
     for cat in config["riskCategories"]:
@@ -570,6 +573,12 @@ def run():
         return 1
 
     trending = compute_trending(merged, config, stopwords, now)
+    # 홈쇼핑 전용 급상승 키워드 (홈쇼핑 태그 기사만 대상, 회사명은 키워드에서 제외)
+    company_names = {alias for c in config["companies"] for alias in c["aliases"]} | \
+                    {c["name"] for c in config["companies"]}
+    hs_arts = [a for a in merged if "homeshopping" in a.get("tabs", [])]
+    hs_trending = compute_trending(hs_arts, config, stopwords | company_names, now)
+    trending["hsKeywords"] = hs_trending["keywords"][:10]
     briefing = compute_briefing(merged, trending, config, now)
 
     write_json(os.path.join(DATA_DIR, "articles.json"),
@@ -608,6 +617,13 @@ def selftest():
     ent = {"title": "'살림남2' 은가은·박현호 축의금 갈등", "description": "방송에서 홈쇼핑 판매 장면이 나왔다."}
     tag_article(ent, config)
     assert ent["noise"] is True and "homeshopping" not in ent["tabs"], ent
+    # 연예 키워드가 있어도 홈쇼핑 관련이면 노이즈 아님
+    ent3 = {"title": "드라마 복귀 앞둔 구혜선, 홈앤쇼핑 쿠롤 완판", "description": ""}
+    tag_article(ent3, config)
+    assert ent3["noise"] is False and "homeshopping" in ent3["tabs"], ent3
+    ent4 = {"title": "시상식 빛낸 배우들 총출동", "description": ""}
+    tag_article(ent4, config)
+    assert ent4["noise"] is True, ent4
     ent2 = {"title": "특가 화제", "description": "홈쇼핑 관련 언급"}
     tag_article(ent2, config)
     assert "homeshopping" not in ent2["tabs"], ent2  # 제목에 홈쇼핑 키워드 없음
