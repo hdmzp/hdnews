@@ -802,7 +802,8 @@ def selftest():
     assert [a["id"] for a in keep] == ["new"] and [a["id"] for a in expired] == ["old"]
 
     br = compute_briefing(arts, tr, config, now)
-    assert br["daily"]["total"] >= 1 and "topTrending" in br["daily"]
+    # 자정 직후에는 '오늘' 집계가 0일 수 있으므로 주간 집계로 검증
+    assert br["weekly"]["total"] >= 1 and "topTrending" in br["daily"]
 
     print("selftest OK")
     return 0
