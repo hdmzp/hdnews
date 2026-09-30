@@ -89,8 +89,7 @@
       "cjmall": "cj", "cjmallplus": "cj", "lotteimall": "lotte", "lotteonetv": "lotte",
       "hnsmall": "hns", "kshop": "ktalpha", "ssgshop": "ssglive", "nsmall": "ns", "nsmallplus": "ns",
       "shopnt": "shoppingnt", "bshop": "skstoa", "wshop": "wshop"
-    },
-    "brandStopwords": ["기타", "없음", "홈쇼핑", "정보없음", "상품", "여행", "보험", "렌탈", "인기", "특가", "단독", "한정", "신상", "신상품", "최신상", "세트", "프리미엄", "정품", "국내산", "베스트", "무료", "방송"]
+    }
   },
   "trending": { "windowHours": 24, "baselineHours": 72, "minCount": 3, "topN": 20 }
 }

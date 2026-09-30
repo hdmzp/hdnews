@@ -220,7 +220,7 @@ def build(articles, config, now, src):
     hd = config.get("hdhs") or {}
     feeds = hd.get("feeds") or {}
     channels = hd.get("rankingChannels") or {}
-    stop = set(hd.get("brandStopwords") or [])
+    stop = set(hd.get("brandStopwords") or []) | load_brand_exclude()
     today = now.date()
     start = today - timedelta(days=SCHEDULE_PAST_DAYS)
     end = today + timedelta(days=SCHEDULE_FUTURE_DAYS)
@@ -265,6 +265,20 @@ def build(articles, config, now, src):
     }
 
 
+BRAND_EXCLUDE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                  "config", "brand_exclude.json")
+
+
+def load_brand_exclude(path=BRAND_EXCLUDE_PATH):
+    """config/brand_exclude.json의 제외 브랜드 목록. 파일이 없거나 깨지면 빈 집합."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return {w.strip() for w in json.load(f).get("exclude", []) if isinstance(w, str) and w.strip()}
+    except (OSError, ValueError, AttributeError):
+        print(f"brand_exclude.json 읽기 실패 — 제외 목록 없이 진행", file=sys.stderr)
+        return set()
+
+
 def make_source(config):
     base = (config.get("hdhs") or {}).get("base", "")
     return Source(os.environ.get("HDHS_BASE", base), os.environ.get("HDHS_DIR") or None)
@@ -298,6 +312,7 @@ def selftest():
     assert not brand_in_title("일월", "제일월드 오픈")          # 앞 글자가 한글
     assert brand_in_title("일월", "일월 온수매트 완판")
     assert not valid_brand("LG", set()) and not valid_brand("기타", {"기타"})
+    assert {"한농연", "인기"} <= load_brand_exclude(), "config/brand_exclude.json 확인"
     assert months_between(datetime(2026, 9, 23).date(), datetime(2026, 10, 7).date()) == ["2026-09", "2026-10"]
 
     class Fake(Source):

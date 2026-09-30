@@ -21,7 +21,7 @@
   - **기사를 많이 낸 브랜드**: 최근 7일 이 회사 기사(주요/언급 토글 따름)에서 브랜드를 뽑아 기사 수로 정렬, 클릭하면 기사 모음 팝업. 브랜드는 ① 제목 맨 앞 주어("고려은단, 27일 롯데홈쇼핑서…") ② hdhs 편성 브랜드(`brandVocab`)가 제목에 등장한 경우. 📺 = 앞뒤 7일 편성 있음. 브라우저에서 계산
   - **카드할인·가격 변동**: HD·GS·CJ·LT 4사만 (hdhs 수집 범위)
 - 로컬에서 hdhs 체크아웃으로 만들 때: `HDHS_DIR=../hdhs HSDASH_FORCE=1 python3 scripts/collect.py`
-- 오탐 브랜드(예: "인기")는 `hdhs.brandStopwords`에 추가, 랭킹 채널↔회사 매핑은 `hdhs.rankingChannels`
+- **브랜드 오탐 제외는 `config/brand_exclude.json`의 `exclude` 목록에 한 줄씩 추가**(예: "한농연"). 사이트는 새로고침하면 바로 반영되고, 수집기(뉴스↔편성 매칭)는 다음 대시보드 재생성(최대 2시간) 때 반영. 랭킹 채널↔회사 매핑은 `keywords.json`의 `hdhs.rankingChannels`
 
 **주요 기사 vs 언급**: 제목에 회사명이 나오면 그 회사의 주요 기사(`mainCompanies`), 요약문에만 나오면 언급(`companies`에만 포함)입니다. 슬라이서와 회사별 집계는 기본적으로 주요 기사 기준이고, "언급 포함"을 누르면 언급 기사까지 봅니다. 회사 설정의 `short`/`hsCode`/`color`는 hdhs(`HS_COMPANIES_*`)와 맞춘 값입니다(W쇼핑은 hdhs 편성 데이터 없음).
 | 스크랩 | ★로 저장한 기사 (브라우저 localStorage — 7일 지나도 유지) |
@@ -42,7 +42,7 @@
 
 ## 운영·튜닝
 
-- **키워드 조정은 `config/keywords.json`만 수정하면 됩니다** (코드 무변경):
+- **키워드 조정은 `config/keywords.json`만 수정하면 됩니다** (코드 무변경, 브랜드 제외 목록만 `config/brand_exclude.json`):
   - `companies[].aliases` — 회사 검색어/별칭
   - `topicQueries` — 탭별 수집 검색어
   - `riskCategories[].keywords` — 리스크 감지 키워드 (weight가 심각도)

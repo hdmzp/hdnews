@@ -21,6 +21,7 @@
     periodFrom: "",      // 직접 기간 (YYYY-MM-DD)
     periodTo: "",
     bookmarks: loadBookmarks(),
+    brandExclude: new Set(),  // config/brand_exclude.json — 브랜드로 치지 않을 이름
   };
 
   const $main = document.getElementById("main");
@@ -38,8 +39,10 @@
     fetchJson("data/briefing.json"),
     fetchJson("config/keywords.json"),
     fetchJson("data/hsdash.json"),   // 회사 대시보드(hdhs 연동) — 없어도 동작
-  ]).then(([articles, trending, briefing, config, hsdash]) => {
+    fetchJson("config/brand_exclude.json"),
+  ]).then(([articles, trending, briefing, config, hsdash, brandExclude]) => {
     state.hsdash = hsdash;
+    state.brandExclude = new Set(((brandExclude && brandExclude.exclude) || []).map((w) => String(w).trim()));
     state.articles = (articles && articles.articles) || [];
     state.trending = trending || { keywords: [] };
     state.briefing = briefing;
@@ -534,7 +537,7 @@
   }
 
   function renderDashNewsLinks(dash, co) {
-    const links = dash.newsLinks || [];
+    const links = (dash.newsLinks || []).filter((l) => !state.brandExclude.has(l.brand));
     let body;
     if (!dash.hsCode) body = '<div class="co-dash-empty">hdhs에 이 회사 편성 데이터가 없습니다.</div>';
     else if (!links.length) body = '<div class="co-dash-empty">최근 기사에 나온 브랜드 중 앞뒤 7일 편성된 브랜드가 없습니다.</div>';
@@ -578,8 +581,6 @@
      브랜드 후보 ① 제목 맨 앞 주어("고려은단, 27일 롯데홈쇼핑서…") ② hdhs 편성 브랜드가 제목에 등장 */
 
   const MAX_DASH_BRANDS = 10;
-  const SUBJECT_STOP = new Set(["유통가", "유통업계", "홈쇼핑", "홈쇼핑업계", "업계", "정부", "국회",
-    "공정위", "방미통위", "방통위", "과기정통부", "소비자원", "단독", "속보", "종합", "인사", "부고"]);
   let dashBrandMap = {};   // 브랜드 → 기사 목록 (팝업용)
 
   function titleSubject(title) {
@@ -588,7 +589,7 @@
     if (!m) return "";
     const s = m[1].trim();
     if (/[…·'"‘’“”→~!?]|\.\.|\d{2,}/.test(s) || (s.match(/\s/g) || []).length > 1) return "";
-    if (SUBJECT_STOP.has(s)) return "";
+    if (state.brandExclude.has(s)) return "";
     // 홈쇼핑사·유통사 자신(또는 'CJ'·'롯데'처럼 그 앞부분)은 브랜드가 아님
     const names = [];
     state.config.companies.concat(state.config.retailCompanies || []).forEach((c) => {
@@ -647,7 +648,8 @@
   }
 
   function renderDashBrands(co, dash) {
-    const vocab = (dash && dash.brandVocab) || [];
+    // 제외 목록(config/brand_exclude.json)은 hsdash 재생성을 기다리지 않고 바로 적용
+    const vocab = ((dash && dash.brandVocab) || []).filter((b) => !state.brandExclude.has(b));
     const brands = companyBrands(co.id, vocab).slice(0, MAX_DASH_BRANDS);
     dashBrandMap = Object.fromEntries(brands.map((b) => [b.brand, b.arts]));
     const scope = state.coScope === "all" ? "언급 포함" : "주요 기사";
