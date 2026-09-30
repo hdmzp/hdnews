@@ -17,7 +17,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 REBUILD_HOURS = 2
@@ -27,7 +27,6 @@ PRICE_CHANGE_DAYS = 14
 MAX_NEWS_LINKS = 12
 MAX_RANKING = 8
 MAX_PRICE_CHANGES = 8
-MAX_CATEGORIES = 6
 PRICE_CHANGE_TYPES = ("price_drop", "price_raise", "sold_out", "restock")
 HANGUL_OR_ALNUM = re.compile(r"[가-힣A-Za-z0-9]")
 
@@ -124,16 +123,6 @@ def load_schedule(src, feeds, start, end):
     return rows
 
 
-def minutes(start, end):
-    try:
-        sh, sm = map(int, start.split(":"))
-        eh, em = map(int, end.split(":"))
-    except (ValueError, AttributeError):
-        return 0
-    m = (eh * 60 + em) - (sh * 60 + sm)
-    return m + 1440 if m < 0 else m
-
-
 def news_links(schedule, arts, stop, now):
     """뉴스 제목에 나온 브랜드 ↔ 그 브랜드의 편성(다음 방송 우선, 없으면 최근 방송)."""
     by_brand = defaultdict(list)
@@ -162,28 +151,10 @@ def news_links(schedule, arts, stop, now):
     return links[:MAX_NEWS_LINKS]
 
 
-def category_mix(schedule, today):
-    """지난 7일(오늘 포함) 라이브 방송 시간 기준 카테고리 비중.
-
-    한 방송 슬롯에 상품이 여러 개(HD·SK스토아 세트 방송 등)면 슬롯 시간을
-    상품 수로 나눠 배분한다 — 상품마다 슬롯 전체를 세면 해당 카테고리가 부풀려짐.
-    """
-    since = (today - timedelta(days=SCHEDULE_PAST_DAYS - 1)).isoformat()
-    slots = defaultdict(list)
-    for r in schedule:
-        if since <= r["date"] <= today.isoformat() and r["bc"] == "live":
-            slots[(r["date"], r["start"], r["end"])].append(r["category"] or "기타")
-    mins = Counter()
-    for (_, start, end), cats in slots.items():
-        per = minutes(start, end) / len(cats)
-        for c in cats:
-            mins[c] += per
-    mins = Counter({c: round(m) for c, m in mins.items()})
-    total = sum(mins.values())
-    if not total:
-        return []
-    return [{"category": c, "minutes": m, "share": round(m / total * 100, 1)}
-            for c, m in mins.most_common(MAX_CATEGORIES)]
+def brand_vocab(schedule, stop):
+    """편성에 나온 브랜드 목록 — 브라우저가 기사 제목에서 브랜드를 찾을 때 사용."""
+    return sorted({r["brand"] for r in schedule if valid_brand(r["brand"], stop)},
+                  key=lambda b: (-len(b), b))
 
 
 def ranking_for(ranking, co_id, channels, news_brands):
@@ -276,7 +247,7 @@ def build(articles, config, now, src):
             "hsCode": code,
             "todayAirs": len(today_air),
             "newsLinks": links,
-            "categoryMix": category_mix(schedule, today),
+            "brandVocab": brand_vocab(schedule, stop),
             "ranking": rk,
             "cards": card_discounts(promo, code, today) if code else None,
             "priceChanges": price_changes(pw, code, today) if code else [],
@@ -327,7 +298,6 @@ def selftest():
     assert not brand_in_title("일월", "제일월드 오픈")          # 앞 글자가 한글
     assert brand_in_title("일월", "일월 온수매트 완판")
     assert not valid_brand("LG", set()) and not valid_brand("기타", {"기타"})
-    assert minutes("23:30", "00:30") == 60 and minutes("08:00", "09:59") == 119
     assert months_between(datetime(2026, 9, 23).date(), datetime(2026, 10, 7).date()) == ["2026-09", "2026-10"]
 
     class Fake(Source):
@@ -368,12 +338,7 @@ def selftest():
     assert cj["cards"]["days"][0]["cards"][0]["rate"] == 7
     assert [p["type"] for p in cj["priceChanges"]] == ["price_drop"]
     assert cj["todayAirs"] == 1
-    assert cj["categoryMix"][0]["category"] in ("뷰티", "식품")
-    # 한 슬롯(60분)에 의류 3개 + 식품 1개 → 의류 45분, 식품 15분 (240분으로 부풀리지 않음)
-    slot = [{"date": "2026-09-30", "start": "10:00", "end": "11:00", "bc": "live", "category": c}
-            for c in ("의류", "의류", "의류", "식품")]
-    mix = category_mix(slot, now.date())
-    assert [(m["category"], m["minutes"], m["share"]) for m in mix] == [("의류", 45, 75.0), ("식품", 15, 25.0)], mix
+    assert cj["brandVocab"] == ["레쁠레뜨"], cj["brandVocab"]  # "기타"는 불용어
     assert out["companies"]["wshop"]["newsLinks"] == [] and out["companies"]["wshop"]["cards"] is None
     print("hsdash selftest OK")
 

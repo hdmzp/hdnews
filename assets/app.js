@@ -199,6 +199,7 @@
     bindArticleEvents();
     bindChipEvents();
     bindPeriodInputs();
+    bindDashBrands();
     bindBarSearch();
     restoreBarSearchFocus();
     document.querySelectorAll(".trend-chip").forEach((el) => {
@@ -470,13 +471,14 @@
         <b>${escapeHtml(co.name)}</b> 한눈에 보기</div>`;
     html += renderDashKpis(coId, dash);
     if (!dash) {
+      html += '<div class="co-dash-grid">' + renderDashBrands(co, null) + "</div>";
       html += '<div class="co-dash-empty">편성·랭킹 데이터(hdhs 연동)가 아직 생성되지 않았습니다. 다음 수집 후 표시됩니다.</div>';
       return html + "</section>";
     }
     html += '<div class="co-dash-grid">';
     html += renderDashNewsLinks(dash, co);
+    html += renderDashBrands(co, dash);
     html += renderDashRanking(dash);
-    html += renderDashCategories(dash);
     html += renderDashPromo(dash, co);
     html += "</div>";
     const src = state.hsdash.source || {};
@@ -572,15 +574,104 @@
     return `<div class="co-panel"><div class="co-panel-title">🏆 이번 주 인기 상품 <span class="co-panel-note">hsmoa 랭킹</span></div>${body}</div>`;
   }
 
-  function renderDashCategories(dash) {
-    const mix = dash.categoryMix || [];
-    const body = mix.length
-      ? '<div class="cat-bars">' + mix.map((m) => `<div class="cat-row" title="${escapeAttr(m.category)} ${Math.round(m.minutes / 60)}시간 (${m.share}%)">
-          <span class="cat-name">${escapeHtml(m.category)}</span>
-          <span class="cat-track"><span class="cat-fill" style="width:${Math.max(2, m.share)}%"></span></span>
-          <span class="cat-val">${m.share}%</span></div>`).join("") + "</div>"
-      : '<div class="co-dash-empty">편성 데이터가 없습니다.</div>';
-    return `<div class="co-panel"><div class="co-panel-title">📊 편성 카테고리 비중 <span class="co-panel-note">최근 7일(오늘 포함) 라이브 방송시간 · hdhs 상품 분류</span></div>${body}</div>`;
+  /* 기사를 많이 낸 브랜드: 이 회사 기사(주요/언급 토글 따름)에서 브랜드를 뽑아 기사 수로 정렬.
+     브랜드 후보 ① 제목 맨 앞 주어("고려은단, 27일 롯데홈쇼핑서…") ② hdhs 편성 브랜드가 제목에 등장 */
+
+  const MAX_DASH_BRANDS = 10;
+  const SUBJECT_STOP = new Set(["유통가", "유통업계", "홈쇼핑", "홈쇼핑업계", "업계", "정부", "국회",
+    "공정위", "방미통위", "방통위", "과기정통부", "소비자원", "단독", "속보", "종합", "인사", "부고"]);
+  let dashBrandMap = {};   // 브랜드 → 기사 목록 (팝업용)
+
+  function titleSubject(title) {
+    const t = title.replace(/^(\s*[\[(【][^\])】]{0,20}[\])】]\s*)+/, "");
+    const m = t.match(/^([^,，]{2,14})[,，]\s/);
+    if (!m) return "";
+    const s = m[1].trim();
+    if (/[…·'"‘’“”→~!?]|\.\.|\d{2,}/.test(s) || (s.match(/\s/g) || []).length > 1) return "";
+    if (SUBJECT_STOP.has(s)) return "";
+    // 홈쇼핑사·유통사 자신(또는 'CJ'·'롯데'처럼 그 앞부분)은 브랜드가 아님
+    const names = [];
+    state.config.companies.concat(state.config.retailCompanies || []).forEach((c) => {
+      names.push(c.name, ...(c.aliases || []));
+      if (c.short) names.push(c.short);
+    });
+    if (names.some((n) => n.startsWith(s) || s.includes(n))) return "";
+    return s;
+  }
+
+  function brandInTitle(brand, title) {
+    let i = title.indexOf(brand);
+    while (i >= 0) {
+      const prev = i ? title[i - 1] : "";
+      if (!/[가-힣A-Za-z0-9]/.test(prev)) {
+        if (brand.length > 2) return true;
+        const next = title[i + brand.length] || "";
+        if (!/[A-Za-z0-9]/.test(next)) return true;
+      }
+      i = title.indexOf(brand, i + 1);
+    }
+    return false;
+  }
+
+  function companyBrands(coId, vocab) {
+    const arts = state.articles.filter((a) =>
+      a.tabs && a.tabs.includes("homeshopping") && coIds(a).includes(coId));
+    const map = {};
+    arts.forEach((a) => {
+      const cands = new Set(vocab.filter((b) => brandInTitle(b, a.title)));
+      const subj = titleSubject(a.title);
+      if (subj) cands.add(subj);
+      // 같은 기사에서 '리더스'와 '리더스코스메틱'이 함께 잡히면 긴 쪽만
+      [...cands].forEach((b) => {
+        if (![...cands].some((c) => c !== b && c.includes(b))) (map[b] = map[b] || []).push(a);
+      });
+    });
+    // 기사마다 짧은/긴 이름으로 따로 잡힌 같은 브랜드 합치기 (리더스 ⊂ 리더스코스메틱)
+    Object.keys(map).sort((x, y) => y.length - x.length).forEach((long) => {
+      Object.keys(map).forEach((short) => {
+        if (short !== long && map[short] && map[long] && long.startsWith(short)) {
+          const ids = new Set(map[long].map((a) => a.id));
+          map[short].forEach((a) => { if (!ids.has(a.id)) map[long].push(a); });
+          delete map[short];
+        }
+      });
+    });
+    return Object.entries(map).map(([brand, list]) => {
+      list.sort(cmpDate);
+      return {
+        brand, arts: list, onAir: vocab.includes(brand),
+        heat: list.reduce((s, a) => s + (a.heat || 1), 0),
+      };
+    }).sort((x, y) => (y.arts.length - x.arts.length) || (y.heat - x.heat) ||
+      cmpDate(x.arts[0], y.arts[0]));
+  }
+
+  function renderDashBrands(co, dash) {
+    const vocab = (dash && dash.brandVocab) || [];
+    const brands = companyBrands(co.id, vocab).slice(0, MAX_DASH_BRANDS);
+    dashBrandMap = Object.fromEntries(brands.map((b) => [b.brand, b.arts]));
+    const scope = state.coScope === "all" ? "언급 포함" : "주요 기사";
+    const body = brands.length
+      ? '<ol class="br-list">' + brands.map((b, i) => `<li class="br-row" data-brand="${escapeAttr(b.brand)}" role="button" tabindex="0" title="${escapeAttr(b.brand)} 기사 모아보기">
+          <span class="br-rank">${i + 1}</span>
+          <span class="br-name">${escapeHtml(b.brand)}${b.onAir ? '<span class="br-air" title="hdhs 앞뒤 7일 편성 있음">📺</span>' : ""}</span>
+          <span class="br-title">${escapeHtml(b.arts[0].title)}</span>
+          <span class="br-cnt">${b.arts.length}건${b.heat > b.arts.length ? `<small> · 보도 ${b.heat}</small>` : ""}</span>
+        </li>`).join("") + "</ol>"
+      : '<div class="co-dash-empty">최근 7일 기사에서 찾은 브랜드가 없습니다.</div>';
+    return `<div class="co-panel"><div class="co-panel-title">🏷️ 기사를 많이 낸 브랜드 <span class="co-panel-note">최근 7일 · ${scope} · 클릭하면 기사 모음</span></div>${body}</div>`;
+  }
+
+  function bindDashBrands() {
+    document.querySelectorAll(".br-row[data-brand]").forEach((el) => {
+      const open = () => {
+        const brand = el.dataset.brand;
+        const arts = dashBrandMap[brand] || [];
+        openArticlesModal(`🏷️ ${brand} 관련 기사 ${arts.length}건`, arts, brand);
+      };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    });
   }
 
   function renderDashPromo(dash, co) {
@@ -699,15 +790,23 @@
   let modalKeyword = "";
 
   function openKeywordModal(kw) {
-    modalKeyword = kw;
     const parts = kw.split(/\s+/).filter(Boolean);
     const matched = state.articles.filter((a) => {
       const text = a.title + " " + (a.description || "");
       return parts.every((p) => text.includes(p));
     }).slice(0, 50);
-    document.getElementById("modalTitle").textContent = `"${kw}" 관련 기사 ${matched.length}건`;
-    document.getElementById("modalBody").innerHTML = matched.length
-      ? `<div class="article-list">${matched.map((a) => renderCard(a)).join("")}</div>`
+    openArticlesModal(`"${kw}" 관련 기사 ${matched.length}건`, matched, kw);
+  }
+
+  // 기사 모음 팝업 (급상승 키워드·브랜드 공용). kw는 "검색으로 보기" 버튼의 검색어
+  let modalReopen = null;
+
+  function openArticlesModal(title, arts, kw) {
+    modalKeyword = kw;
+    modalReopen = () => openArticlesModal(title, arts, kw);
+    document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalBody").innerHTML = arts.length
+      ? `<div class="article-list">${arts.map((a) => renderCard(a)).join("")}</div>`
       : '<div class="empty-state">관련 기사가 없습니다.</div>';
     document.getElementById("modal").hidden = false;
     document.body.style.overflow = "hidden";
@@ -785,7 +884,7 @@
         saveBookmarks();
         updateScrapCount();
         render();
-        if (!document.getElementById("modal").hidden) openKeywordModal(modalKeyword);
+        if (!document.getElementById("modal").hidden) modalReopen && modalReopen();
       });
     });
   }
