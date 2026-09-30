@@ -580,7 +580,7 @@
           <span class="cat-track"><span class="cat-fill" style="width:${Math.max(2, m.share)}%"></span></span>
           <span class="cat-val">${m.share}%</span></div>`).join("") + "</div>"
       : '<div class="co-dash-empty">편성 데이터가 없습니다.</div>';
-    return `<div class="co-panel"><div class="co-panel-title">📊 편성 카테고리 비중 <span class="co-panel-note">최근 7일 라이브 방송시간</span></div>${body}</div>`;
+    return `<div class="co-panel"><div class="co-panel-title">📊 편성 카테고리 비중 <span class="co-panel-note">최근 7일(오늘 포함) 라이브 방송시간 · hdhs 상품 분류</span></div>${body}</div>`;
   }
 
   function renderDashPromo(dash, co) {

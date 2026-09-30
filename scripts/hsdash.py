@@ -163,12 +163,22 @@ def news_links(schedule, arts, stop, now):
 
 
 def category_mix(schedule, today):
-    """지난 7일(오늘 포함) 방송 시간 기준 카테고리 비중."""
+    """지난 7일(오늘 포함) 라이브 방송 시간 기준 카테고리 비중.
+
+    한 방송 슬롯에 상품이 여러 개(HD·SK스토아 세트 방송 등)면 슬롯 시간을
+    상품 수로 나눠 배분한다 — 상품마다 슬롯 전체를 세면 해당 카테고리가 부풀려짐.
+    """
     since = (today - timedelta(days=SCHEDULE_PAST_DAYS - 1)).isoformat()
-    mins = Counter()
+    slots = defaultdict(list)
     for r in schedule:
         if since <= r["date"] <= today.isoformat() and r["bc"] == "live":
-            mins[r["category"] or "기타"] += minutes(r["start"], r["end"])
+            slots[(r["date"], r["start"], r["end"])].append(r["category"] or "기타")
+    mins = Counter()
+    for (_, start, end), cats in slots.items():
+        per = minutes(start, end) / len(cats)
+        for c in cats:
+            mins[c] += per
+    mins = Counter({c: round(m) for c, m in mins.items()})
     total = sum(mins.values())
     if not total:
         return []
@@ -359,6 +369,11 @@ def selftest():
     assert [p["type"] for p in cj["priceChanges"]] == ["price_drop"]
     assert cj["todayAirs"] == 1
     assert cj["categoryMix"][0]["category"] in ("뷰티", "식품")
+    # 한 슬롯(60분)에 의류 3개 + 식품 1개 → 의류 45분, 식품 15분 (240분으로 부풀리지 않음)
+    slot = [{"date": "2026-09-30", "start": "10:00", "end": "11:00", "bc": "live", "category": c}
+            for c in ("의류", "의류", "의류", "식품")]
+    mix = category_mix(slot, now.date())
+    assert [(m["category"], m["minutes"], m["share"]) for m in mix] == [("의류", 45, 75.0), ("식품", 15, 25.0)], mix
     assert out["companies"]["wshop"]["newsLinks"] == [] and out["companies"]["wshop"]["cards"] is None
     print("hsdash selftest OK")
 
