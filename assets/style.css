@@ -211,6 +211,47 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
   display: inline-block;
 }
 
+/* ================= 세그먼트 슬라이서 (hdhs 홈쇼핑 탭 스타일) ================= */
+.slicer-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.seg-slicer {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px;
+  padding: 4px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--hairline);
+}
+.seg-types { display: flex; margin-bottom: 10px; }
+.seg-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: inherit; font-size: 0.8rem; font-weight: 600;
+  padding: 6px 11px; border: none; border-radius: 7px;
+  background: none; color: var(--ink-muted); cursor: pointer;
+  white-space: nowrap; transition: background 0.15s, color 0.15s;
+}
+.seg-btn:hover:not(.active) { background: var(--canvas); color: var(--ink); }
+.seg-btn.active { background: var(--ink); color: var(--surface); }
+.seg-btn .cnt { font-size: 0.7rem; font-weight: 500; opacity: 0.65; }
+.seg-btn .risk-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--orange);
+  display: inline-block;
+}
+/* 회사 버튼: 선택 시 hdhs와 같은 회사 고유색 */
+.co-btn { color: var(--co, var(--ink-muted)); }
+.co-btn.active { background: var(--co, var(--ink)); color: #fff; }
+.co-btn.active .risk-dot { background: #fff; }
+.co-btn.empty { opacity: 0.45; }
+/* 다크 테마에선 짙은 회사색 글자가 안 읽혀 미선택 버튼은 기본 색 */
+[data-theme="dark"] .co-btn:not(.active) { color: var(--ink-muted); }
+.seg-btn.risk { color: var(--orange); }
+.seg-btn.risk.active { background: var(--orange); color: #fff; }
+.seg-sep { width: 1px; align-self: stretch; background: var(--hairline); margin: 3px 3px; }
+.seg-scope .seg-btn { font-size: 0.76rem; padding: 6px 10px; }
+@media (max-width: 768px) {
+  .seg-btn { font-size: 0.74rem; padding: 5px 8px; }
+  .seg-btn .cnt { display: none; }
+}
+
 /* ================= 필터 바 ================= */
 .filter-bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
@@ -265,6 +306,10 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 .meta-chip.risk { background: var(--orange-tint); color: var(--orange); }
 .meta-chip.heat { background: rgba(255, 100, 200, 0.12); color: var(--pink); }
 .meta-chip.cat { background: rgba(42, 157, 153, 0.12); color: var(--teal); }
+.meta-chip.mention {
+  background: transparent; color: var(--ink-faint); font-weight: 500;
+  border: 1px dashed var(--hairline);
+}
 
 /* 필터 바 내 키워드 검색 */
 .bar-search {
@@ -387,6 +432,7 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
   background: var(--grad-y2k);
 }
 .company-bar-row .risk-mark { color: var(--orange); font-size: 0.75rem; font-weight: 700; }
+.company-bar-row .mention-mark { color: var(--ink-faint); font-size: 0.72rem; }
 
 /* ================= 모달 ================= */
 .modal { position: fixed; inset: 0; z-index: 50; }

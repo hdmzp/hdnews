@@ -15,7 +15,7 @@
     selectedRetailCos: new Set(),
     selectedTypes: new Set(),   // 유형 필터 (일반 + 리스크 카테고리)
     query: "",
-    matchScope: "all",   // all | title | body
+    coScope: "main",     // main(제목에 회사명 = 주체 기사) | all(본문 언급 포함)
     sortOrder: "latest", // latest | risk
     periodDays: null,    // null=전체, 1/3/7=최근 N일
     periodFrom: "",      // 직접 기간 (YYYY-MM-DD)
@@ -109,12 +109,13 @@
     }
     if (state.activeTab === "homeshopping") {
       if (state.selectedCompanies.size) {
-        arts = arts.filter((a) => a.companies && a.companies.some((c) => state.selectedCompanies.has(c)));
+        arts = arts.filter((a) => coIds(a).some((c) => state.selectedCompanies.has(c)));
       }
       if (state.selectedTypes.size) {
         arts = arts.filter((a) =>
           (a.riskCategories || []).some((c) => state.selectedTypes.has(c)) ||
-          (a.categories || []).some((c) => state.selectedTypes.has(c)));
+          (a.categories || []).some((c) => state.selectedTypes.has(c)) ||
+          (state.selectedTypes.has("etc") && isUntyped(a)));
       }
     }
     // 기간 필터 (직접 지정 우선, 없으면 최근 N일)
@@ -138,15 +139,6 @@
         return parts.every((p) => text.includes(p));
       });
     }
-    if (state.activeTab === "homeshopping" && state.matchScope !== "all") {
-      arts = arts.filter((a) => {
-        const terms = matchTermsFor(a);
-        if (!terms.length) return false;
-        const inTitle = terms.some((t) => a.title.includes(t));
-        if (state.matchScope === "title") return inTitle;
-        return !inTitle && terms.some((t) => (a.description || "").includes(t));
-      });
-    }
     if (state.activeTab === "homeshopping") {
       if (state.sortOrder === "risk") {
         arts = arts.slice().sort((x, y) => (y.riskScore - x.riskScore) || cmpDate(x, y));
@@ -160,18 +152,15 @@
     return arts;
   }
 
-  // 매칭 범위 필터의 기준 검색어: 검색어 > 선택한 회사의 별칭 > 기사에 태깅된 회사의 별칭
-  function matchTermsFor(article) {
-    if (state.query) return [state.query];
-    const ids = state.selectedCompanies.size
-      ? [...state.selectedCompanies]
-      : (article.companies || []);
-    const terms = [];
-    ids.forEach((id) => {
-      const c = state.config.companies.find((x) => x.id === id);
-      if (c) terms.push(c.name, ...(c.aliases || []));
-    });
-    return terms;
+  // 슬라이서 기준 회사 목록: 주체(제목 등장) 또는 언급 포함.
+  // mainCompanies가 없는 예전 기사(스크랩 등)는 전체 매칭으로 대체
+  function coIds(a) {
+    if (state.coScope === "all") return a.companies || [];
+    return a.mainCompanies || a.companies || [];
+  }
+
+  function isUntyped(a) {
+    return !(a.categories || []).length && !(a.riskCategories || []).length;
   }
 
   function cmpDate(x, y) {
@@ -293,6 +282,7 @@
     if (!b) return "";
     const byCo = b.byCompany || {};
     const riskByCo = b.riskByCompany || {};
+    const mentionByCo = b.mentionByCompany || {};
     const max = Math.max(1, ...Object.values(byCo));
     const open = localStorage.getItem("hdnews.companyOpen") !== "0";
     const end = state.briefing.generatedAt ? new Date(state.briefing.generatedAt) : new Date();
@@ -303,9 +293,11 @@
     state.config.companies.forEach((c) => {
       const n = byCo[c.id] || 0;
       const w = Math.round((n / max) * 100);
+      const m = mentionByCo[c.id] || 0;
       html += `<div class="company-bar-row" data-co="${c.id}" title="${c.name} 기사 보기">
         <span class="name">${c.name}</span>
-        <span class="bar" style="width:${w * 0.6}%"></span><span>${n}</span>
+        <span class="bar" style="width:${w * 0.6}%;background:${escapeAttr(c.color || "")}"></span><span>${n}</span>
+        ${m ? `<span class="mention-mark" title="본문에만 언급된 기사">+언급 ${m}</span>` : ""}
         ${riskByCo[c.id] ? `<span class="risk-mark">⚠ ${riskByCo[c.id]}</span>` : ""}</div>`;
     });
     return html + "</div></details>";
@@ -330,12 +322,8 @@
     if (periodOnly) {
       return `<div class="filter-bar">${renderPeriodControls()}</div>`;
     }
-    const ms = state.matchScope, so = state.sortOrder;
+    const so = state.sortOrder;
     return `<div class="filter-bar">
-      <span class="filter-label">매칭</span>
-      ${chip("ms:all", "전체", ms === "all", "")}
-      ${chip("ms:title", "제목 포함", ms === "title", "")}
-      ${chip("ms:body", "본문만", ms === "body", "")}
       <input type="search" id="barSearch" class="bar-search" placeholder="키워드 검색" value="${escapeAttr(state.query)}">
       <span class="filter-sep"></span>
       <span class="filter-label">정렬</span>
@@ -385,15 +373,6 @@
     });
   }
 
-  const TYPE_EMOJI = { "TV홈쇼핑": "📺", "T커머스": "🛍️" };
-  const RISK_EMOJI = {
-    reapproval: "📋", legal: "⚖️", broadcast: "🚨", ad: "🤫",
-    expose: "🔥", consumer: "🛑", safety: "⚠️", privacy: "🔒",
-  };
-  const GENERAL_EMOJI = {
-    promo: "🎁", launch: "🆕", marketing: "📣", broadcast_sales: "🧨",
-    performance: "📊", people: "👥", partnership: "🤝", esg: "🌱",
-  };
 
   // 유통 NEWS: 유통기업 슬라이서 (작은 칩)
   function renderRetailCoSlicer() {
@@ -407,34 +386,48 @@
     return html + "</div>";
   }
 
+  // 홈쇼핑 NEWS 슬라이서 — hdhs 홈쇼핑 탭과 같은 약칭·순서·색상(HD GS CJ LT | 기타사)
   function renderSlicers() {
-    let html = "";
     const recentRisk = companyRiskSet();
-    const groups = { "TV홈쇼핑": [], "T커머스": [] };
-    state.config.companies.forEach((c) => (groups[c.type] || (groups[c.type] = [])).push(c));
-    const companyChips = (cos, emoji) => cos.map((c) => {
-      const cnt = state.articles.filter((a) =>
-        a.companies && a.companies.includes(c.id)).length;
-      const extra = (cnt ? `<span class="cnt">${cnt}</span>` : "") +
+    const hsArts = state.articles.filter((a) => a.tabs && a.tabs.includes("homeshopping"));
+    const cos = state.config.companies;
+    const coBtn = (c) => {
+      const cnt = hsArts.filter((a) => coIds(a).includes(c.id)).length;
+      const active = state.selectedCompanies.has(c.id);
+      const style = c.color ? ` style="--co:${escapeAttr(c.color)}"` : "";
+      const extra = `<span class="cnt">${cnt}</span>` +
         (recentRisk.has(c.id) ? '<span class="risk-dot" title="최근 48시간 내 리스크 기사"></span>' : "");
-      return chip("co:" + c.id, `${emoji} ${c.name}`, state.selectedCompanies.has(c.id), extra);
-    }).join("");
-    Object.entries(groups).forEach(([type, cos], i) => {
-      html += `<div class="chip-group"><div class="chip-group-label">${type}</div><div class="chip-row">`;
-      if (i === 0) html += chip("co-all", "✨ 전체", !state.selectedCompanies.size, "");
-      html += companyChips(cos, TYPE_EMOJI[type] || "🏬");
-      html += "</div></div>";
-    });
-    html += '<div class="chip-group"><div class="chip-group-label">유형</div><div class="chip-row">';
-    html += chip("tp-all", "✨ 전체", !state.selectedTypes.size, "");
-    (state.config.generalCategories || []).forEach((gc) => {
-      html += chip("tp:" + gc.id, `${GENERAL_EMOJI[gc.id] || "🏷️"} ${gc.name}`, state.selectedTypes.has(gc.id), "");
-    });
-    state.config.riskCategories.forEach((rc) => {
-      html += chip("tp:" + rc.id, `${RISK_EMOJI[rc.id] || "🚩"} ${rc.name}`, state.selectedTypes.has(rc.id), "");
-    });
+      return `<button class="seg-btn co-btn${active ? " active" : ""}${cnt ? "" : " empty"}" data-chip="co:${c.id}"${style} title="${escapeAttr(c.name)} (Ctrl/⌘+클릭: 여러 사 선택)">${escapeHtml(c.short || c.name)}${extra}</button>`;
+    };
+    let html = '<div class="slicer-row"><div class="seg-slicer" role="group" aria-label="홈쇼핑사">';
+    html += segBtn("co-all", "전체", !state.selectedCompanies.size);
+    html += '<span class="seg-sep"></span>';
+    html += cos.filter((c) => c.group === "main").map(coBtn).join("");
+    html += '<span class="seg-sep"></span>';
+    html += cos.filter((c) => c.group !== "main").map(coBtn).join("");
+    html += "</div>";
+    html += '<div class="seg-slicer seg-scope" role="group" aria-label="회사 매칭 범위">';
+    html += segBtn("cs:main", "주요 기사", state.coScope === "main", "제목에 회사명이 나온 기사");
+    html += segBtn("cs:all", "언급 포함", state.coScope === "all", "본문에만 회사명이 나온 기사까지");
     html += "</div></div>";
-    return html;
+
+    const t = state.selectedTypes;
+    html += '<div class="seg-slicer seg-types" role="group" aria-label="기사 유형">';
+    html += segBtn("tp-all", "전체 유형", !t.size);
+    html += '<span class="seg-sep"></span>';
+    (state.config.generalCategories || []).forEach((gc) => {
+      html += segBtn("tp:" + gc.id, gc.name, t.has(gc.id));
+    });
+    html += segBtn("tp:etc", "기타", t.has("etc"), "어떤 유형에도 해당하지 않는 기사");
+    html += '<span class="seg-sep"></span>';
+    state.config.riskCategories.forEach((rc) => {
+      html += `<button class="seg-btn risk${t.has(rc.id) ? " active" : ""}" data-chip="tp:${rc.id}">⚠ ${escapeHtml(rc.name)}</button>`;
+    });
+    return html + "</div>";
+  }
+
+  function segBtn(key, label, active, title) {
+    return `<button class="seg-btn${active ? " active" : ""}" data-chip="${key}"${title ? ` title="${escapeAttr(title)}"` : ""}>${escapeHtml(label)}</button>`;
   }
 
   function chip(key, label, active, extra) {
@@ -446,7 +439,7 @@
     const set = new Set();
     state.articles.forEach((a) => {
       if (a.riskScore >= 1 && a.pubDate && new Date(a.pubDate).getTime() >= cutoff) {
-        (a.companies || []).forEach((c) => set.add(c));
+        coIds(a).forEach((c) => set.add(c));
       }
     });
     return set;
@@ -468,9 +461,14 @@
 
   function renderCard(a, rank) {
     const riskClass = a.riskScore >= 3 ? "risk-3" : a.riskScore === 2 ? "risk-2" : a.riskScore === 1 ? "risk-1" : "";
+    // 주체 회사는 진하게, 본문에만 언급된 회사는 흐리게
+    const mains = a.mainCompanies || a.companies || [];
     const companies = (a.companies || []).map((id) => {
       const c = state.config.companies.find((x) => x.id === id);
-      return c ? `<span class="meta-chip">${c.name}</span>` : "";
+      if (!c) return "";
+      return mains.includes(id)
+        ? `<span class="meta-chip co">${c.name}</span>`
+        : `<span class="meta-chip mention" title="본문 언급">${c.name} 언급</span>`;
     }).join("");
     const risks = (a.riskCategories || []).map((id) => {
       const rc = state.config.riskCategories.find((x) => x.id === id);
@@ -555,16 +553,22 @@
   /* ---------------- 이벤트 ---------------- */
 
   function bindChipEvents() {
-    document.querySelectorAll(".chip").forEach((el) => {
-      el.addEventListener("click", () => {
+    document.querySelectorAll(".chip, .seg-btn").forEach((el) => {
+      el.addEventListener("click", (e) => {
         const key = el.dataset.chip;
         if (key === "co-all") state.selectedCompanies.clear();
         else if (key === "rco-all") state.selectedRetailCos.clear();
         else if (key.startsWith("rco:")) toggleSet(state.selectedRetailCos, key.slice(4));
         else if (key === "tp-all") state.selectedTypes.clear();
-        else if (key.startsWith("co:")) toggleSet(state.selectedCompanies, key.slice(3));
+        else if (key.startsWith("co:")) {
+          // hdhs 슬라이서처럼 한 회사만 선택, Ctrl/⌘+클릭은 다중 선택
+          const id = key.slice(3);
+          if (e.ctrlKey || e.metaKey) toggleSet(state.selectedCompanies, id);
+          else if (state.selectedCompanies.size === 1 && state.selectedCompanies.has(id)) state.selectedCompanies.clear();
+          else state.selectedCompanies = new Set([id]);
+        }
         else if (key.startsWith("tp:")) toggleSet(state.selectedTypes, key.slice(3));
-        else if (key.startsWith("ms:")) state.matchScope = key.slice(3);
+        else if (key.startsWith("cs:")) state.coScope = key.slice(3);
         else if (key.startsWith("so:")) state.sortOrder = key.slice(3);
         else if (key.startsWith("pd:")) {
           const v = key.slice(3);
