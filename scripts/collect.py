@@ -687,6 +687,15 @@ def run():
     write_json(os.path.join(DATA_DIR, "trending.json"), trending)
     write_json(os.path.join(DATA_DIR, "briefing.json"), briefing)
 
+    # 회사 대시보드(hdhs 편성·랭킹 연동) — 실패해도 뉴스 수집 결과에는 영향 없음
+    try:
+        import hsdash
+        status = hsdash.update(os.path.join(DATA_DIR, "hsdash.json"), merged, config, now,
+                               load_json, write_json)
+        print(f"hsdash: {status}")
+    except Exception as e:  # noqa: BLE001 — 부가 기능이라 어떤 오류든 격리
+        print(f"hsdash 생성 실패 (무시): {e}", file=sys.stderr)
+
     print(f"완료: 쿼리 성공 {ok} / 실패 {fail}, 신규 {new_count}건, "
           f"썸네일 {img_count}건, 보관 {len(merged)}건, 아카이브 {len(expired)}건")
     return 0
@@ -832,6 +841,9 @@ def selftest():
     br = compute_briefing(arts, tr, config, now)
     # 자정 직후에는 '오늘' 집계가 0일 수 있으므로 주간 집계로 검증
     assert br["weekly"]["total"] >= 1 and "topTrending" in br["daily"]
+
+    import hsdash
+    hsdash.selftest()
 
     print("selftest OK")
     return 0

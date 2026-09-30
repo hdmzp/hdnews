@@ -77,5 +77,20 @@
     { "id": "assembly", "name": "국회·국감", "weight": 1, "keywords": ["국정감사", "국감", "과방위", "청문회", "증인 채택", "증인 출석", "의원"] },
     { "id": "privacy", "name": "정보보호", "weight": 2, "keywords": ["개인정보 유출", "해킹", "전산 장애", "전산장애"] }
   ],
+  "hdhs": {
+    "base": "https://hdmzp.github.io/hdhs/",
+    "feeds": {
+      "HD": ["HD_live", "HD_data"], "GS": ["GS_live", "GS_data"], "CJ": ["CJ_live", "CJ_data"], "LT": ["LT_live", "LT_data"],
+      "PUBLIC": ["PUBLIC_live"], "HNS": ["HNS_live"], "KTALPHA": ["KTALPHA_live"], "SHINSEGAE": ["SHINSEGAE_live"],
+      "NS": ["NS_live", "NS_plus"], "SHOPPINGNT": ["SHOPPINGNT_live"], "SKSTOA": ["SKSTOA_live"]
+    },
+    "rankingChannels": {
+      "hmall": "hyundai", "hmallplus": "hyundai", "gsshop": "gsshop", "gsmyshop": "gsshop",
+      "cjmall": "cj", "cjmallplus": "cj", "lotteimall": "lotte", "lotteonetv": "lotte",
+      "hnsmall": "hns", "kshop": "ktalpha", "ssgshop": "ssglive", "nsmall": "ns", "nsmallplus": "ns",
+      "shopnt": "shoppingnt", "bshop": "skstoa", "wshop": "wshop"
+    },
+    "brandStopwords": ["기타", "없음", "홈쇼핑", "정보없음", "상품", "여행", "보험", "렌탈", "인기", "특가", "단독", "한정", "신상", "신상품", "최신상", "세트", "프리미엄", "정품", "국내산", "베스트", "무료", "방송"]
+  },
   "trending": { "windowHours": 24, "baselineHours": 72, "minCount": 3, "topN": 20 }
 }
