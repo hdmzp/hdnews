@@ -297,10 +297,18 @@ def from_excluded_domain(art, domains):
 
 
 def tag_article(art, config):
-    """companies / rcompanies / tabs / 유형 / riskScore / noise 필드를 채운다."""
-    text = art["title"] + " " + art.get("description", "")
+    """companies / mainCompanies / rcompanies / tabs / 유형 / riskScore / noise 필드를 채운다.
+
+    companies는 본문 언급까지 포함한 전체 매칭, mainCompanies는 제목에 회사명이
+    나온 '주체' 기사만. 요약문 한 줄 언급(브리핑 모음·타사 기사 속 사례)으로
+    회사 기사로 잡히는 오탐을 주체/언급으로 구분하기 위함.
+    """
+    title = art["title"]
+    text = title + " " + art.get("description", "")
     companies = [c["id"] for c in config["companies"]
                  if any(alias in text for alias in c["aliases"])]
+    main_companies = [c["id"] for c in config["companies"]
+                      if c["id"] in companies and any(alias in title for alias in c["aliases"])]
     rcompanies = [c["id"] for c in config.get("retailCompanies", [])
                   if any(alias in text for alias in c["aliases"])]
     # 홈쇼핑 관련: 회사명 매칭 또는 홈쇼핑 키워드가 '제목'에 등장
@@ -338,7 +346,8 @@ def tag_article(art, config):
              or not relevant)
     if noise and "homeshopping" in tabs:
         tabs.remove("homeshopping")
-    art.update(companies=companies, rcompanies=rcompanies, tabs=tabs,
+    art.update(companies=companies, mainCompanies=main_companies,
+               rcompanies=rcompanies, tabs=tabs,
                riskCategories=risk_cats, categories=general_cats,
                riskScore=score, noise=noise)
     return art
@@ -458,13 +467,19 @@ def compute_trending(articles, config, stopwords, now, window_hours=None, min_co
 
 def aggregate(articles, config):
     by_tab, by_company, risk_by_company = Counter(), Counter(), Counter()
+    mention_by_company = Counter()
     for a in articles:
         for t in a["tabs"]:
             by_tab[t] += 1
-        for c in a["companies"]:
+        # 회사별 집계·리스크는 주체 기사 기준, 단순 언급은 따로 센다
+        main = a.get("mainCompanies", a["companies"])
+        for c in main:
             by_company[c] += 1
             if a["riskScore"] >= 1:
                 risk_by_company[c] += 1
+        for c in a["companies"]:
+            if c not in main:
+                mention_by_company[c] += 1
     top_risk = sorted((a for a in articles if a["riskScore"] >= 1),
                       key=lambda a: (a["riskScore"], a["pubDate"] or ""), reverse=True)[:5]
     return {
@@ -472,6 +487,7 @@ def aggregate(articles, config):
         "byTab": dict(by_tab),
         "byCompany": dict(by_company),
         "riskByCompany": dict(risk_by_company),
+        "mentionByCompany": dict(mention_by_company),
         "topRiskArticleIds": [a["id"] for a in top_risk],
     }
 
@@ -671,6 +687,15 @@ def run():
     write_json(os.path.join(DATA_DIR, "trending.json"), trending)
     write_json(os.path.join(DATA_DIR, "briefing.json"), briefing)
 
+    # 회사 대시보드(hdhs 편성·랭킹 연동) — 실패해도 뉴스 수집 결과에는 영향 없음
+    try:
+        import hsdash
+        status = hsdash.update(os.path.join(DATA_DIR, "hsdash.json"), merged, config, now,
+                               load_json, write_json)
+        print(f"hsdash: {status}")
+    except Exception as e:  # noqa: BLE001 — 부가 기능이라 어떤 오류든 격리
+        print(f"hsdash 생성 실패 (무시): {e}", file=sys.stderr)
+
     print(f"완료: 쿼리 성공 {ok} / 실패 {fail}, 신규 {new_count}건, "
           f"썸네일 {img_count}건, 보관 {len(merged)}건, 아카이브 {len(expired)}건")
     return 0
@@ -697,6 +722,18 @@ def selftest():
     tag_article(art, config)
     assert art["companies"] == ["hns"], art
     assert "homeshopping" in art["tabs"] and art["riskScore"] == 0
+
+    # 요약문에만 회사명이 나오면 언급(companies)이지 주체(mainCompanies)는 아님
+    brief = {"title": "[유통브리핑] 쿠팡, 리빙쇼 진행 외",
+             "description": "NS홈쇼핑, 추석 연휴 이후 힐링템 집중 편성"}
+    tag_article(brief, config)
+    assert brief["companies"] == ["ns"] and brief["mainCompanies"] == [], brief
+    assert art["mainCompanies"] == ["hns"], art
+    audit = {"title": "국감 카운트다운…CEO 줄소환 예고", "description": "롯데홈쇼핑 대표 증인 채택"}
+    tag_article(audit, config)
+    assert "assembly" in audit["riskCategories"] and audit["mainCompanies"] == [], audit
+    agg = aggregate([dict(brief, pubDate="2026"), dict(art, pubDate="2026")], config)
+    assert agg["byCompany"] == {"hns": 1} and agg["mentionByCompany"] == {"ns": 1}, agg
 
     gen = {"title": "GS샵, 여름 특가 프로모션…신제품 출시 기념", "description": ""}
     tag_article(gen, config)
@@ -804,6 +841,9 @@ def selftest():
     br = compute_briefing(arts, tr, config, now)
     # 자정 직후에는 '오늘' 집계가 0일 수 있으므로 주간 집계로 검증
     assert br["weekly"]["total"] >= 1 and "topTrending" in br["daily"]
+
+    import hsdash
+    hsdash.selftest()
 
     print("selftest OK")
     return 0

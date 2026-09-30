@@ -15,12 +15,13 @@
     selectedRetailCos: new Set(),
     selectedTypes: new Set(),   // 유형 필터 (일반 + 리스크 카테고리)
     query: "",
-    matchScope: "all",   // all | title | body
+    coScope: "main",     // main(제목에 회사명 = 주체 기사) | all(본문 언급 포함)
     sortOrder: "latest", // latest | risk
     periodDays: null,    // null=전체, 1/3/7=최근 N일
     periodFrom: "",      // 직접 기간 (YYYY-MM-DD)
     periodTo: "",
     bookmarks: loadBookmarks(),
+    brandExclude: new Set(),  // config/brand_exclude.json — 브랜드로 치지 않을 이름
   };
 
   const $main = document.getElementById("main");
@@ -37,7 +38,11 @@
     fetchJson("data/trending.json"),
     fetchJson("data/briefing.json"),
     fetchJson("config/keywords.json"),
-  ]).then(([articles, trending, briefing, config]) => {
+    fetchJson("data/hsdash.json"),   // 회사 대시보드(hdhs 연동) — 없어도 동작
+    fetchJson("config/brand_exclude.json"),
+  ]).then(([articles, trending, briefing, config, hsdash, brandExclude]) => {
+    state.hsdash = hsdash;
+    state.brandExclude = new Set(((brandExclude && brandExclude.exclude) || []).map((w) => String(w).trim()));
     state.articles = (articles && articles.articles) || [];
     state.trending = trending || { keywords: [] };
     state.briefing = briefing;
@@ -109,12 +114,13 @@
     }
     if (state.activeTab === "homeshopping") {
       if (state.selectedCompanies.size) {
-        arts = arts.filter((a) => a.companies && a.companies.some((c) => state.selectedCompanies.has(c)));
+        arts = arts.filter((a) => coIds(a).some((c) => state.selectedCompanies.has(c)));
       }
       if (state.selectedTypes.size) {
         arts = arts.filter((a) =>
           (a.riskCategories || []).some((c) => state.selectedTypes.has(c)) ||
-          (a.categories || []).some((c) => state.selectedTypes.has(c)));
+          (a.categories || []).some((c) => state.selectedTypes.has(c)) ||
+          (state.selectedTypes.has("etc") && isUntyped(a)));
       }
     }
     // 기간 필터 (직접 지정 우선, 없으면 최근 N일)
@@ -138,15 +144,6 @@
         return parts.every((p) => text.includes(p));
       });
     }
-    if (state.activeTab === "homeshopping" && state.matchScope !== "all") {
-      arts = arts.filter((a) => {
-        const terms = matchTermsFor(a);
-        if (!terms.length) return false;
-        const inTitle = terms.some((t) => a.title.includes(t));
-        if (state.matchScope === "title") return inTitle;
-        return !inTitle && terms.some((t) => (a.description || "").includes(t));
-      });
-    }
     if (state.activeTab === "homeshopping") {
       if (state.sortOrder === "risk") {
         arts = arts.slice().sort((x, y) => (y.riskScore - x.riskScore) || cmpDate(x, y));
@@ -160,18 +157,15 @@
     return arts;
   }
 
-  // 매칭 범위 필터의 기준 검색어: 검색어 > 선택한 회사의 별칭 > 기사에 태깅된 회사의 별칭
-  function matchTermsFor(article) {
-    if (state.query) return [state.query];
-    const ids = state.selectedCompanies.size
-      ? [...state.selectedCompanies]
-      : (article.companies || []);
-    const terms = [];
-    ids.forEach((id) => {
-      const c = state.config.companies.find((x) => x.id === id);
-      if (c) terms.push(c.name, ...(c.aliases || []));
-    });
-    return terms;
+  // 슬라이서 기준 회사 목록: 주체(제목 등장) 또는 언급 포함.
+  // mainCompanies가 없는 예전 기사(스크랩 등)는 전체 매칭으로 대체
+  function coIds(a) {
+    if (state.coScope === "all") return a.companies || [];
+    return a.mainCompanies || a.companies || [];
+  }
+
+  function isUntyped(a) {
+    return !(a.categories || []).length && !(a.riskCategories || []).length;
   }
 
   function cmpDate(x, y) {
@@ -198,6 +192,9 @@
       }
       html += '<div class="dash-section-title" id="hsFeed">📚 회사별 기사 모음</div>';
       html += renderSlicers();
+      if (state.selectedCompanies.size === 1 && !searching) {
+        html += renderCompanyDash([...state.selectedCompanies][0]);
+      }
       html += renderFilterBar();
     }
     html += renderArticleList(filterArticles());
@@ -205,6 +202,7 @@
     bindArticleEvents();
     bindChipEvents();
     bindPeriodInputs();
+    bindDashBrands();
     bindBarSearch();
     restoreBarSearchFocus();
     document.querySelectorAll(".trend-chip").forEach((el) => {
@@ -293,6 +291,7 @@
     if (!b) return "";
     const byCo = b.byCompany || {};
     const riskByCo = b.riskByCompany || {};
+    const mentionByCo = b.mentionByCompany || {};
     const max = Math.max(1, ...Object.values(byCo));
     const open = localStorage.getItem("hdnews.companyOpen") !== "0";
     const end = state.briefing.generatedAt ? new Date(state.briefing.generatedAt) : new Date();
@@ -303,9 +302,11 @@
     state.config.companies.forEach((c) => {
       const n = byCo[c.id] || 0;
       const w = Math.round((n / max) * 100);
+      const m = mentionByCo[c.id] || 0;
       html += `<div class="company-bar-row" data-co="${c.id}" title="${c.name} 기사 보기">
         <span class="name">${c.name}</span>
-        <span class="bar" style="width:${w * 0.6}%"></span><span>${n}</span>
+        <span class="bar" style="width:${w * 0.6}%;background:${escapeAttr(c.color || "")}"></span><span>${n}</span>
+        ${m ? `<span class="mention-mark" title="본문에만 언급된 기사">+언급 ${m}</span>` : ""}
         ${riskByCo[c.id] ? `<span class="risk-mark">⚠ ${riskByCo[c.id]}</span>` : ""}</div>`;
     });
     return html + "</div></details>";
@@ -330,12 +331,8 @@
     if (periodOnly) {
       return `<div class="filter-bar">${renderPeriodControls()}</div>`;
     }
-    const ms = state.matchScope, so = state.sortOrder;
+    const so = state.sortOrder;
     return `<div class="filter-bar">
-      <span class="filter-label">매칭</span>
-      ${chip("ms:all", "전체", ms === "all", "")}
-      ${chip("ms:title", "제목 포함", ms === "title", "")}
-      ${chip("ms:body", "본문만", ms === "body", "")}
       <input type="search" id="barSearch" class="bar-search" placeholder="키워드 검색" value="${escapeAttr(state.query)}">
       <span class="filter-sep"></span>
       <span class="filter-label">정렬</span>
@@ -385,15 +382,6 @@
     });
   }
 
-  const TYPE_EMOJI = { "TV홈쇼핑": "📺", "T커머스": "🛍️" };
-  const RISK_EMOJI = {
-    reapproval: "📋", legal: "⚖️", broadcast: "🚨", ad: "🤫",
-    expose: "🔥", consumer: "🛑", safety: "⚠️", privacy: "🔒",
-  };
-  const GENERAL_EMOJI = {
-    promo: "🎁", launch: "🆕", marketing: "📣", broadcast_sales: "🧨",
-    performance: "📊", people: "👥", partnership: "🤝", esg: "🌱",
-  };
 
   // 유통 NEWS: 유통기업 슬라이서 (작은 칩)
   function renderRetailCoSlicer() {
@@ -407,34 +395,48 @@
     return html + "</div>";
   }
 
+  // 홈쇼핑 NEWS 슬라이서 — hdhs 홈쇼핑 탭과 같은 약칭·순서·색상(HD GS CJ LT | 기타사)
   function renderSlicers() {
-    let html = "";
     const recentRisk = companyRiskSet();
-    const groups = { "TV홈쇼핑": [], "T커머스": [] };
-    state.config.companies.forEach((c) => (groups[c.type] || (groups[c.type] = [])).push(c));
-    const companyChips = (cos, emoji) => cos.map((c) => {
-      const cnt = state.articles.filter((a) =>
-        a.companies && a.companies.includes(c.id)).length;
-      const extra = (cnt ? `<span class="cnt">${cnt}</span>` : "") +
+    const hsArts = state.articles.filter((a) => a.tabs && a.tabs.includes("homeshopping"));
+    const cos = state.config.companies;
+    const coBtn = (c) => {
+      const cnt = hsArts.filter((a) => coIds(a).includes(c.id)).length;
+      const active = state.selectedCompanies.has(c.id);
+      const style = c.color ? ` style="--co:${escapeAttr(c.color)}"` : "";
+      const extra = `<span class="cnt">${cnt}</span>` +
         (recentRisk.has(c.id) ? '<span class="risk-dot" title="최근 48시간 내 리스크 기사"></span>' : "");
-      return chip("co:" + c.id, `${emoji} ${c.name}`, state.selectedCompanies.has(c.id), extra);
-    }).join("");
-    Object.entries(groups).forEach(([type, cos], i) => {
-      html += `<div class="chip-group"><div class="chip-group-label">${type}</div><div class="chip-row">`;
-      if (i === 0) html += chip("co-all", "✨ 전체", !state.selectedCompanies.size, "");
-      html += companyChips(cos, TYPE_EMOJI[type] || "🏬");
-      html += "</div></div>";
-    });
-    html += '<div class="chip-group"><div class="chip-group-label">유형</div><div class="chip-row">';
-    html += chip("tp-all", "✨ 전체", !state.selectedTypes.size, "");
-    (state.config.generalCategories || []).forEach((gc) => {
-      html += chip("tp:" + gc.id, `${GENERAL_EMOJI[gc.id] || "🏷️"} ${gc.name}`, state.selectedTypes.has(gc.id), "");
-    });
-    state.config.riskCategories.forEach((rc) => {
-      html += chip("tp:" + rc.id, `${RISK_EMOJI[rc.id] || "🚩"} ${rc.name}`, state.selectedTypes.has(rc.id), "");
-    });
+      return `<button class="seg-btn co-btn${active ? " active" : ""}${cnt ? "" : " empty"}" data-chip="co:${c.id}"${style} title="${escapeAttr(c.name)} (Ctrl/⌘+클릭: 여러 사 선택)">${escapeHtml(c.short || c.name)}${extra}</button>`;
+    };
+    let html = '<div class="slicer-row"><div class="seg-slicer" role="group" aria-label="홈쇼핑사">';
+    html += segBtn("co-all", "전체", !state.selectedCompanies.size);
+    html += '<span class="seg-sep"></span>';
+    html += cos.filter((c) => c.group === "main").map(coBtn).join("");
+    html += '<span class="seg-sep"></span>';
+    html += cos.filter((c) => c.group !== "main").map(coBtn).join("");
+    html += "</div>";
+    html += '<div class="seg-slicer seg-scope" role="group" aria-label="회사 매칭 범위">';
+    html += segBtn("cs:main", "주요 기사", state.coScope === "main", "제목에 회사명이 나온 기사");
+    html += segBtn("cs:all", "언급 포함", state.coScope === "all", "본문에만 회사명이 나온 기사까지");
     html += "</div></div>";
-    return html;
+
+    const t = state.selectedTypes;
+    html += '<div class="seg-slicer seg-types" role="group" aria-label="기사 유형">';
+    html += segBtn("tp-all", "전체 유형", !t.size);
+    html += '<span class="seg-sep"></span>';
+    (state.config.generalCategories || []).forEach((gc) => {
+      html += segBtn("tp:" + gc.id, gc.name, t.has(gc.id));
+    });
+    html += segBtn("tp:etc", "기타", t.has("etc"), "어떤 유형에도 해당하지 않는 기사");
+    html += '<span class="seg-sep"></span>';
+    state.config.riskCategories.forEach((rc) => {
+      html += `<button class="seg-btn risk${t.has(rc.id) ? " active" : ""}" data-chip="tp:${rc.id}">⚠ ${escapeHtml(rc.name)}</button>`;
+    });
+    return html + "</div>";
+  }
+
+  function segBtn(key, label, active, title) {
+    return `<button class="seg-btn${active ? " active" : ""}" data-chip="${key}"${title ? ` title="${escapeAttr(title)}"` : ""}>${escapeHtml(label)}</button>`;
   }
 
   function chip(key, label, active, extra) {
@@ -446,10 +448,272 @@
     const set = new Set();
     state.articles.forEach((a) => {
       if (a.riskScore >= 1 && a.pubDate && new Date(a.pubDate).getTime() >= cutoff) {
-        (a.companies || []).forEach((c) => set.add(c));
+        coIds(a).forEach((c) => set.add(c));
       }
     });
     return set;
+  }
+
+  /* ----- 회사 대시보드 (슬라이서에서 한 회사 선택 시) ----- */
+  // 기사 추이·점유율은 articles.json으로 직접 계산(항상 최신),
+  // 편성·랭킹·카드할인·가격변동은 수집기가 hdhs에서 미리 합친 hsdash.json 사용
+
+  const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
+  const BC_LABEL = { live: "라이브", data: "데이터", plus: "플러스" };
+  const PRICE_CHANGE_LABEL = {
+    price_drop: "가격 인하", price_raise: "가격 인상", sold_out: "품절", restock: "재입고",
+  };
+
+  function renderCompanyDash(coId) {
+    const co = state.config.companies.find((c) => c.id === coId);
+    if (!co) return "";
+    const color = escapeAttr(co.color || "var(--ink)");
+    const dash = state.hsdash && state.hsdash.companies && state.hsdash.companies[coId];
+    let html = `<section class="co-dash" style="--co:${color}">
+      <div class="co-dash-head"><span class="co-dash-tag">${escapeHtml(co.short || co.name)}</span>
+        <b>${escapeHtml(co.name)}</b> 한눈에 보기</div>`;
+    html += renderDashKpis(coId, dash);
+    if (!dash) {
+      html += '<div class="co-dash-grid">' + renderDashBrands(co, null) + "</div>";
+      html += '<div class="co-dash-empty">편성·랭킹 데이터(hdhs 연동)가 아직 생성되지 않았습니다. 다음 수집 후 표시됩니다.</div>';
+      return html + "</section>";
+    }
+    html += '<div class="co-dash-grid">';
+    html += renderDashNewsLinks(dash, co);
+    html += renderDashBrands(co, dash);
+    html += renderDashRanking(dash);
+    html += renderDashPromo(dash, co);
+    html += "</div>";
+    const src = state.hsdash.source || {};
+    const week = src.rankingWeek ? ` · 랭킹 주간 ${src.rankingWeek[0]}~${src.rankingWeek[1]}` : "";
+    html += `<div class="co-dash-foot">출처: hdhs 편성표·hsmoa 랭킹${week} · 연동 갱신 ${formatRelative(state.hsdash.generatedAt)}</div>`;
+    return html + "</section>";
+  }
+
+  function renderDashKpis(coId, dash) {
+    const hsArts = state.articles.filter((a) => a.tabs && a.tabs.includes("homeshopping"));
+    const end = new Date();
+    const days = [];
+    for (let i = 6; i >= 0; i--) days.push(ymdLocal(new Date(end.getTime() - i * 864e5)));
+    const perDay = Object.fromEntries(days.map((d) => [d, 0]));
+    let main = 0, mention = 0, risk = 0;
+    const byCo = {};
+    hsArts.forEach((a) => {
+      const d = a.pubDate ? ymdLocal(new Date(a.pubDate)) : "";
+      if (!(d in perDay)) return;
+      const mains = a.mainCompanies || a.companies || [];
+      mains.forEach((c) => { byCo[c] = (byCo[c] || 0) + 1; });
+      if (mains.includes(coId)) {
+        main++; perDay[d]++;
+        if (a.riskScore >= 1) risk++;
+      } else if ((a.companies || []).includes(coId)) mention++;
+    });
+    const total = Object.values(byCo).reduce((s, n) => s + n, 0);
+    const share = total ? Math.round((main / total) * 1000) / 10 : 0;
+    const rank = Object.values(byCo).filter((n) => n > main).length + 1;
+    const max = Math.max(1, ...Object.values(perDay));
+    const spark = days.map((d) => {
+      const n = perDay[d];
+      const h = n ? Math.max(3, Math.round((n / max) * 28)) : 1;
+      const dt = new Date(d + "T00:00:00");
+      return `<span class="spark-bar${n ? "" : " zero"}" style="height:${h}px" title="${d.slice(5).replace("-", ".")}(${WEEKDAY[dt.getDay()]}) 주요 기사 ${n}건"></span>`;
+    }).join("");
+    const airs = dash && dash.hsCode ? `${dash.todayAirs}<small>건</small>` : "–";
+    return `<div class="co-kpis">
+      <div class="co-kpi"><div class="label">7일 주요 기사</div>
+        <div class="num">${main}<small>건</small></div>
+        <div class="sub">${mention ? `+ 본문 언급 ${mention}건` : "&nbsp;"}</div>
+        <div class="spark" aria-label="최근 7일 일자별 주요 기사 수">${spark}</div></div>
+      <div class="co-kpi"><div class="label">보도 점유율 (7일)</div>
+        <div class="num">${share}<small>%</small></div>
+        <div class="sub">${main ? `12개사 중 ${rank}위` : "주요 기사 없음"}</div></div>
+      <div class="co-kpi"><div class="label">리스크 기사 (7일)</div>
+        <div class="num${risk ? " risk" : ""}">${risk}<small>건</small></div>
+        <div class="sub">${risk ? '<span class="chip-link" data-chip="so:risk">리스크순 보기</span>' : "&nbsp;"}</div></div>
+      <div class="co-kpi"><div class="label">오늘 편성</div>
+        <div class="num">${airs}</div>
+        <div class="sub">${dash && dash.hsCode ? "라이브+데이터 방송" : "편성 데이터 없음"}</div></div>
+    </div>`;
+  }
+
+  function renderDashNewsLinks(dash, co) {
+    const links = (dash.newsLinks || []).filter((l) => !state.brandExclude.has(l.brand));
+    let body;
+    if (!dash.hsCode) body = '<div class="co-dash-empty">hdhs에 이 회사 편성 데이터가 없습니다.</div>';
+    else if (!links.length) body = '<div class="co-dash-empty">최근 기사에 나온 브랜드 중 앞뒤 7일 편성된 브랜드가 없습니다.</div>';
+    else {
+      body = '<div class="nl-list">' + links.map((l) => {
+        const art = state.articles.find((a) => a.id === l.articleId);
+        const url = art ? (art.link || art.originallink) : "";
+        const n = l.next || {};
+        const when = n.date ? `${fmtMd(n.date)} ${escapeHtml(n.start || "")}` : "";
+        // hsdash는 최대 2시간 전 생성이라 예정/지난 여부는 지금 시각으로 다시 판정
+        const upcoming = n.date ? new Date(`${n.date}T${n.start || "00:00"}:00+09:00`) >= new Date() : l.isUpcoming;
+        const airMeta = [n.price ? `${Number(n.price).toLocaleString()}원` : "", `앞뒤 7일 ${l.airCount}회 편성`]
+          .filter(Boolean).join(" · ");
+        const prod = escapeHtml(cleanProduct(n.product || ""));
+        const prodHtml = n.link ? `<a href="${escapeAttr(n.link)}" target="_blank" rel="noopener">${prod}</a>` : prod;
+        const title = escapeHtml(l.title);
+        return `<div class="nl-row">
+          <div class="nl-brand">${escapeHtml(l.brand)}
+            <span class="nl-badge${upcoming ? " up" : ""}">${upcoming ? "방송 예정" : "지난 방송"}</span></div>
+          <div class="nl-news">📰 ${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener">${title}</a>` : title}
+            <span class="nl-meta">${formatDate(l.pubDate)}${l.articleCount > 1 ? ` · 기사 ${l.articleCount}건` : ""}</span></div>
+          <div class="nl-air">📺 <b>${when}</b> ${BC_LABEL[n.bc] && n.bc !== "live" ? `<span class="nl-bc">${BC_LABEL[n.bc]}</span>` : ""}${prodHtml}<span class="nl-meta">${airMeta}</span></div>
+        </div>`;
+      }).join("") + "</div>";
+    }
+    return `<div class="co-panel wide"><div class="co-panel-title">📺 뉴스에 나온 브랜드의 편성</div>${body}</div>`;
+  }
+
+  function renderDashRanking(dash) {
+    const rk = dash.ranking || [];
+    const body = rk.length
+      ? '<ol class="rk-list">' + rk.map((r) => `<li>
+          <span class="rk-pos" title="${escapeAttr(r.category)} 카테고리 순위">${escapeHtml(r.category === "전체" ? "전체" : r.category)} ${r.rank}위</span>
+          <span class="rk-name" title="${escapeAttr(r.name)}">${r.inNews ? '<span class="rk-news" title="이 브랜드가 최근 기사에 등장">📰</span>' : ""}${escapeHtml(r.brand ? r.brand + " · " : "")}${escapeHtml(cleanProduct(r.name))}</span>
+          <span class="rk-price">${r.price ? Number(r.price).toLocaleString() + "원" : ""}</span></li>`).join("") + "</ol>"
+      : '<div class="co-dash-empty">이번 주 랭킹에 이 회사 상품이 없습니다.</div>';
+    return `<div class="co-panel"><div class="co-panel-title">🏆 이번 주 인기 상품 <span class="co-panel-note">hsmoa 랭킹</span></div>${body}</div>`;
+  }
+
+  /* 기사를 많이 낸 브랜드: 이 회사 기사(주요/언급 토글 따름)에서 브랜드를 뽑아 기사 수로 정렬.
+     브랜드 후보 ① 제목 맨 앞 주어("고려은단, 27일 롯데홈쇼핑서…") ② hdhs 편성 브랜드가 제목에 등장 */
+
+  const MAX_DASH_BRANDS = 10;
+  let dashBrandMap = {};   // 브랜드 → 기사 목록 (팝업용)
+
+  function titleSubject(title) {
+    const t = title.replace(/^(\s*[\[(【][^\])】]{0,20}[\])】]\s*)+/, "");
+    const m = t.match(/^([^,，]{2,14})[,，]\s/);
+    if (!m) return "";
+    const s = m[1].trim();
+    if (/[…·'"‘’“”→~!?]|\.\.|\d{2,}/.test(s) || (s.match(/\s/g) || []).length > 1) return "";
+    if (state.brandExclude.has(s)) return "";
+    // 홈쇼핑사·유통사 자신(또는 'CJ'·'롯데'처럼 그 앞부분)은 브랜드가 아님
+    const names = [];
+    state.config.companies.concat(state.config.retailCompanies || []).forEach((c) => {
+      names.push(c.name, ...(c.aliases || []));
+      if (c.short) names.push(c.short);
+    });
+    if (names.some((n) => n.startsWith(s) || s.includes(n))) return "";
+    return s;
+  }
+
+  function brandInTitle(brand, title) {
+    let i = title.indexOf(brand);
+    while (i >= 0) {
+      const prev = i ? title[i - 1] : "";
+      if (!/[가-힣A-Za-z0-9]/.test(prev)) {
+        if (brand.length > 2) return true;
+        const next = title[i + brand.length] || "";
+        if (!/[A-Za-z0-9]/.test(next)) return true;
+      }
+      i = title.indexOf(brand, i + 1);
+    }
+    return false;
+  }
+
+  function companyBrands(coId, vocab) {
+    const arts = state.articles.filter((a) =>
+      a.tabs && a.tabs.includes("homeshopping") && coIds(a).includes(coId));
+    const map = {};
+    arts.forEach((a) => {
+      const cands = new Set(vocab.filter((b) => brandInTitle(b, a.title)));
+      const subj = titleSubject(a.title);
+      if (subj) cands.add(subj);
+      // 같은 기사에서 '리더스'와 '리더스코스메틱'이 함께 잡히면 긴 쪽만
+      [...cands].forEach((b) => {
+        if (![...cands].some((c) => c !== b && c.includes(b))) (map[b] = map[b] || []).push(a);
+      });
+    });
+    // 기사마다 짧은/긴 이름으로 따로 잡힌 같은 브랜드 합치기 (리더스 ⊂ 리더스코스메틱)
+    Object.keys(map).sort((x, y) => y.length - x.length).forEach((long) => {
+      Object.keys(map).forEach((short) => {
+        if (short !== long && map[short] && map[long] && long.startsWith(short)) {
+          const ids = new Set(map[long].map((a) => a.id));
+          map[short].forEach((a) => { if (!ids.has(a.id)) map[long].push(a); });
+          delete map[short];
+        }
+      });
+    });
+    return Object.entries(map).map(([brand, list]) => {
+      list.sort(cmpDate);
+      return {
+        brand, arts: list, onAir: vocab.includes(brand),
+        heat: list.reduce((s, a) => s + (a.heat || 1), 0),
+      };
+    }).sort((x, y) => (y.arts.length - x.arts.length) || (y.heat - x.heat) ||
+      cmpDate(x.arts[0], y.arts[0]));
+  }
+
+  function renderDashBrands(co, dash) {
+    // 제외 목록(config/brand_exclude.json)은 hsdash 재생성을 기다리지 않고 바로 적용
+    const vocab = ((dash && dash.brandVocab) || []).filter((b) => !state.brandExclude.has(b));
+    const brands = companyBrands(co.id, vocab).slice(0, MAX_DASH_BRANDS);
+    dashBrandMap = Object.fromEntries(brands.map((b) => [b.brand, b.arts]));
+    const scope = state.coScope === "all" ? "언급 포함" : "주요 기사";
+    const body = brands.length
+      ? '<ol class="br-list">' + brands.map((b, i) => `<li class="br-row" data-brand="${escapeAttr(b.brand)}" role="button" tabindex="0" title="${escapeAttr(b.brand)} 기사 모아보기">
+          <span class="br-rank">${i + 1}</span>
+          <span class="br-name">${escapeHtml(b.brand)}${b.onAir ? '<span class="br-air" title="hdhs 앞뒤 7일 편성 있음">📺</span>' : ""}</span>
+          <span class="br-title">${escapeHtml(b.arts[0].title)}</span>
+          <span class="br-cnt">${b.arts.length}건${b.heat > b.arts.length ? `<small> · 보도 ${b.heat}</small>` : ""}</span>
+        </li>`).join("") + "</ol>"
+      : '<div class="co-dash-empty">최근 7일 기사에서 찾은 브랜드가 없습니다.</div>';
+    return `<div class="co-panel"><div class="co-panel-title">🏷️ 기사를 많이 낸 브랜드 <span class="co-panel-note">최근 7일 · ${scope} · 클릭하면 기사 모음</span></div>${body}</div>`;
+  }
+
+  function bindDashBrands() {
+    document.querySelectorAll(".br-row[data-brand]").forEach((el) => {
+      const open = () => {
+        const brand = el.dataset.brand;
+        const arts = dashBrandMap[brand] || [];
+        openArticlesModal(`🏷️ ${brand} 관련 기사 ${arts.length}건`, arts, brand);
+      };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    });
+  }
+
+  function renderDashPromo(dash, co) {
+    const cards = dash.cards;
+    const pcs = dash.priceChanges || [];
+    if (!cards && !pcs.length) return "";
+    let body = "";
+    if (cards && cards.days && cards.days.length) {
+      body += '<div class="promo-sub">💳 카드할인 (오늘부터 7일)</div><div class="promo-days">' + cards.days.map((d) =>
+        `<div class="promo-day"><span class="promo-date">${fmtMd(d.date)}</span>${d.cards.map((c) =>
+          `<span class="promo-card">${escapeHtml(c.card)} ${c.rate}%${c.type && c.type !== "즉시할인" ? ` <small>${escapeHtml(c.type)}</small>` : ""}</span>`).join("")}</div>`).join("") + "</div>";
+    } else if (cards) {
+      body += '<div class="co-dash-empty">예정된 카드할인이 없습니다.</div>';
+    }
+    if (pcs.length) {
+      body += '<div class="promo-sub">🏷️ 가격 변동 (최근 14일)</div><ul class="pc-list">' + pcs.map((p) => {
+        const prev = p.prevPrice ? `${Number(p.prevPrice).toLocaleString()}→` : "";
+        const price = p.price ? `${prev}${Number(p.price).toLocaleString()}원` : "";
+        const name = escapeHtml((p.brand ? p.brand + " · " : "") + cleanProduct(p.name));
+        return `<li><span class="pc-type ${p.type}">${PRICE_CHANGE_LABEL[p.type] || p.type}</span>
+          ${p.link ? `<a href="${escapeAttr(p.link)}" target="_blank" rel="noopener">${name}</a>` : name}
+          <span class="pc-meta">${price} · ${fmtMd(p.date)}</span></li>`;
+      }).join("") + "</ul>";
+    }
+    return `<div class="co-panel"><div class="co-panel-title">💸 카드할인·가격 변동</div>${body}</div>`;
+  }
+
+  function ymdLocal(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function fmtMd(ymd) {
+    const d = new Date(ymd + "T00:00:00");
+    if (isNaN(d)) return escapeHtml(ymd || "");
+    return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAY[d.getDay()]})`;
+  }
+
+  // 편성 상품명 앞의 ○·[방송특가] 같은 장식 기호 제거
+  function cleanProduct(s) {
+    return String(s || "").replace(/^[^0-9A-Za-z가-힣\[(]+/, "").trim();
   }
 
   /* ----- 기사 리스트 / 카드 ----- */
@@ -468,9 +732,14 @@
 
   function renderCard(a, rank) {
     const riskClass = a.riskScore >= 3 ? "risk-3" : a.riskScore === 2 ? "risk-2" : a.riskScore === 1 ? "risk-1" : "";
+    // 주체 회사는 진하게, 본문에만 언급된 회사는 흐리게
+    const mains = a.mainCompanies || a.companies || [];
     const companies = (a.companies || []).map((id) => {
       const c = state.config.companies.find((x) => x.id === id);
-      return c ? `<span class="meta-chip">${c.name}</span>` : "";
+      if (!c) return "";
+      return mains.includes(id)
+        ? `<span class="meta-chip co">${c.name}</span>`
+        : `<span class="meta-chip mention" title="본문 언급">${c.name} 언급</span>`;
     }).join("");
     const risks = (a.riskCategories || []).map((id) => {
       const rc = state.config.riskCategories.find((x) => x.id === id);
@@ -523,15 +792,23 @@
   let modalKeyword = "";
 
   function openKeywordModal(kw) {
-    modalKeyword = kw;
     const parts = kw.split(/\s+/).filter(Boolean);
     const matched = state.articles.filter((a) => {
       const text = a.title + " " + (a.description || "");
       return parts.every((p) => text.includes(p));
     }).slice(0, 50);
-    document.getElementById("modalTitle").textContent = `"${kw}" 관련 기사 ${matched.length}건`;
-    document.getElementById("modalBody").innerHTML = matched.length
-      ? `<div class="article-list">${matched.map((a) => renderCard(a)).join("")}</div>`
+    openArticlesModal(`"${kw}" 관련 기사 ${matched.length}건`, matched, kw);
+  }
+
+  // 기사 모음 팝업 (급상승 키워드·브랜드 공용). kw는 "검색으로 보기" 버튼의 검색어
+  let modalReopen = null;
+
+  function openArticlesModal(title, arts, kw) {
+    modalKeyword = kw;
+    modalReopen = () => openArticlesModal(title, arts, kw);
+    document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalBody").innerHTML = arts.length
+      ? `<div class="article-list">${arts.map((a) => renderCard(a)).join("")}</div>`
       : '<div class="empty-state">관련 기사가 없습니다.</div>';
     document.getElementById("modal").hidden = false;
     document.body.style.overflow = "hidden";
@@ -555,16 +832,22 @@
   /* ---------------- 이벤트 ---------------- */
 
   function bindChipEvents() {
-    document.querySelectorAll(".chip").forEach((el) => {
-      el.addEventListener("click", () => {
+    document.querySelectorAll(".chip, .seg-btn, .chip-link").forEach((el) => {
+      el.addEventListener("click", (e) => {
         const key = el.dataset.chip;
         if (key === "co-all") state.selectedCompanies.clear();
         else if (key === "rco-all") state.selectedRetailCos.clear();
         else if (key.startsWith("rco:")) toggleSet(state.selectedRetailCos, key.slice(4));
         else if (key === "tp-all") state.selectedTypes.clear();
-        else if (key.startsWith("co:")) toggleSet(state.selectedCompanies, key.slice(3));
+        else if (key.startsWith("co:")) {
+          // hdhs 슬라이서처럼 한 회사만 선택, Ctrl/⌘+클릭은 다중 선택
+          const id = key.slice(3);
+          if (e.ctrlKey || e.metaKey) toggleSet(state.selectedCompanies, id);
+          else if (state.selectedCompanies.size === 1 && state.selectedCompanies.has(id)) state.selectedCompanies.clear();
+          else state.selectedCompanies = new Set([id]);
+        }
         else if (key.startsWith("tp:")) toggleSet(state.selectedTypes, key.slice(3));
-        else if (key.startsWith("ms:")) state.matchScope = key.slice(3);
+        else if (key.startsWith("cs:")) state.coScope = key.slice(3);
         else if (key.startsWith("so:")) state.sortOrder = key.slice(3);
         else if (key.startsWith("pd:")) {
           const v = key.slice(3);
@@ -603,7 +886,7 @@
         saveBookmarks();
         updateScrapCount();
         render();
-        if (!document.getElementById("modal").hidden) openKeywordModal(modalKeyword);
+        if (!document.getElementById("modal").hidden) modalReopen && modalReopen();
       });
     });
   }
