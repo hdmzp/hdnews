@@ -321,7 +321,8 @@ def tag_article(art, config):
       ② 연예 키워드 기사 — 제목에 있으면 홈쇼핑 관련이 아닌 한 노이즈, 요약에만 있어도
          제목에 유통 맥락이 없고 홈쇼핑사 언급도 없으면 노이즈
       ③ 어떤 회사·유통 키워드·유통 유형에도 매칭되지 않는 기사 (리스크 키워드만으로는 통과 못 함)
-      ④ [인사]·[동정]·[부고] 같은 모음 — 제목에 홈쇼핑사·유통기업 이름이 없으면 노이즈
+      ④ [인사]·[동정]·[부고]·운세 같은 모음(noiseTags/noiseTitlePrefixes) — 회사명이 있어도 항상 노이즈
+         (이 사이트는 트렌드·이슈 뉴스가 중심이라 인사 소식은 보여주지 않는다)
       ⑤ [산업소식]·[2026 국감]·[포토] 같은 모음·연재 태그 — 제목에 회사·유통 키워드가 없고 홈쇼핑사 언급도 없으면 노이즈
     리스크 분류는 제목에 유통 맥락이 있거나 홈쇼핑사가 언급된 기사에만 적용한다
     (연예·정치 기사의 '논란'이 리스크로 잡히는 오탐 방지).
@@ -379,7 +380,7 @@ def tag_article(art, config):
              or (not hs_related and ent_title)
              or (not strong and not companies and ent_text)
              or not weak
-             or (personnel and not (main_companies or rcompanies_title))
+             or personnel
              or (roundup and not strong and not companies))
     if noise:
         tabs = [t for t in tabs if t not in ("homeshopping", "risk")]
@@ -958,7 +959,14 @@ def selftest():
     assert hr["noise"] is True, hr
     hr2 = {"title": "[인사] TBWA코리아 / 홈앤쇼핑 / 한국신용평가", "description": ""}
     tag_article(hr2, config)
-    assert hr2["noise"] is False and hr2["mainCompanies"] == ["hns"], hr2
+    assert hr2["noise"] is True and hr2["mainCompanies"] == ["hns"], hr2   # 홈쇼핑사가 있어도 인사 모음은 제외
+    hr5 = {"title": "[인사] 홈앤쇼핑, 이성훈·한복현·이현승 상무 승진…'안정적 성장 기반' 방점", "description": ""}
+    tag_article(hr5, config)
+    assert hr5["noise"] is True, hr5
+    # 태그 없는 일반 기사는 인사 내용이어도 유지 (회사 뉴스)
+    plain = {"title": "홈앤쇼핑, 신임 상무 3인 승진…조직 안정에 방점", "description": ""}
+    tag_article(plain, config)
+    assert plain["noise"] is False and plain["mainCompanies"] == ["hns"], plain
     hr3 = {"title": "오늘의 인사-산업통상부, 행정안전부 외", "description": "유통 담당 과장 전보"}
     tag_article(hr3, config)
     assert hr3["noise"] is True, hr3
@@ -978,7 +986,7 @@ def selftest():
 
     hr4 = {"title": "[인사] 정준호 전 롯데백화점 대표, 몽클레르코리아 수장으로", "description": ""}
     tag_article(hr4, config)
-    assert hr4["noise"] is False, hr4          # 유통기업 인사는 유지
+    assert hr4["noise"] is True, hr4           # 유통기업 인사도 제외
     sale = {"title": "신세계百, 가을 정기세일 돌입…300여 브랜드 최대 60% 할인", "description": ""}
     tag_article(sale, config)
     assert sale["noise"] is False and "promo" in sale["categories"], sale   # 유통 유형(프로모션)으로 통과
