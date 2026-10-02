@@ -1,0 +1,9 @@
+# 로컬 재현용: `docker compose up` 후 http://localhost:30015 접속
+# PORT 환경변수로 바꿀 수 있습니다 (예: PORT=8080 docker compose up).
+services:
+  web:
+    build: .
+    environment:
+      - PORT=${PORT:-30015}
+    ports:
+      - "${PORT:-30015}:${PORT:-30015}"
