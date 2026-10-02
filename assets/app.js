@@ -1,9 +1,18 @@
-/* hdnews 프론트엔드 — 의존성 없는 순수 JS SPA (3탭: 유통 핫이슈 / 홈쇼핑 이슈 / 스크랩) */
+/* hdnews 프론트엔드 — 의존성 없는 순수 JS SPA
+   화면: 홈 / 발견 / 이슈 타임라인 / 유통·홈쇼핑 피드 / 스크랩 / 회사.
+   DOM 없이 계산되는 로직(새 기사 판정·배지·그룹핑·라우트 파싱)은 issues-core.js(HdCore) 에 있다. */
 (function () {
   "use strict";
 
   const BOOKMARK_KEY = "hdnews.bookmarks";
   const THEME_KEY = "hdnews.theme";
+  const FOLLOWS_KEY = "hdnews.follows";            // 이슈 팔로우 { [issueId]: { followedAt, seenLastAt, title } }
+  const ISSUE_SEEN_KEY = "hdnews.issueSeen";       // 이슈 상세 마지막 열람 시각(ms)
+  const SHORTCUT_SEEN_KEY = "hdnews.shortcutSeen"; // 바로가기 마지막 진입 시각(ms)
+  const MY_COMPANY_KEY = "hdnews.myCompany";
+  const RECENT_KEY = "hdnews.recent";              // 최근 본 기사 id (최대 20)
+  const HdCore = window.HdCore;
+  const ARTICLE_VIEWS = new Set(["retail", "homeshopping", "scrap", "company", "topic", "risk"]);  // 기사 목록을 그리는 화면
 
   const state = {
     articles: [],
@@ -22,6 +31,21 @@
     periodTo: "",
     bookmarks: loadBookmarks(),
     brandExclude: new Set(),  // config/brand_exclude.json — 브랜드로 치지 않을 이름
+    // --- 모바일 개편 (홈 / 이슈 타임라인 / 발견) ---
+    view: "home",            // 현재 화면 (HdCore.parseHash 결과)
+    routeParam: "",
+    routeQuery: {},
+    issues: [],              // data/issues.json — 72시간 같은 사건 묶음
+    issuesMeta: null,
+    shortcuts: [],           // config/shortcuts.json
+    follows: loadJson(FOLLOWS_KEY, {}),
+    issueSeen: loadJson(ISSUE_SEEN_KEY, {}),
+    shortcutSeen: loadJson(SHORTCUT_SEEN_KEY, {}),
+    myCompany: loadJson(MY_COMPANY_KEY, ""),
+    recent: loadJson(RECENT_KEY, []),
+    discoverCat: "all",
+    issuesFilter: "all",     // all | follow
+    issuesCat: "all",
   };
 
   const $main = document.getElementById("main");
@@ -40,7 +64,18 @@
     fetchJson("config/keywords.json"),
     fetchJson("data/hsdash.json"),   // 회사 대시보드(hdhs 연동) — 없어도 동작
     fetchJson("config/brand_exclude.json"),
-  ]).then(([articles, trending, briefing, config, hsdash, brandExclude]) => {
+    fetchJson("data/issues.json"),   // 이슈 타임라인 — 없어도 동작
+    fetchJson("config/shortcuts.json"),
+  ]).then(([articles, trending, briefing, config, hsdash, brandExclude, issuesDoc, shortcuts]) => {
+    state.issuesMeta = issuesDoc;
+    state.issues = (issuesDoc && issuesDoc.issues) || [];
+    state.shortcuts = (shortcuts && shortcuts.shortcuts) || [];
+    // 수집기가 이슈를 합치면 이전 id가 prevIds 로 남는다 → 팔로우를 새 id 로 옮긴다
+    const migrated = HdCore.migrateFollows(state.follows, state.issues);
+    if (migrated.moved.length) {
+      state.follows = migrated.follows;
+      saveJson(FOLLOWS_KEY, state.follows);
+    }
     state.hsdash = hsdash;
     state.brandExclude = new Set(((brandExclude && brandExclude.exclude) || []).map((w) => String(w).trim()));
     state.articles = (articles && articles.articles) || [];
@@ -52,6 +87,7 @@
       $updatedAt.title = articles.generatedAt;
     }
     renderSideStats();
+    updateAlertDots();
     route();
   }).catch(() => {
     $main.innerHTML = '<div class="empty-state">데이터를 불러오지 못했습니다.<br>수집 워크플로가 아직 실행되지 않았을 수 있습니다.</div>';
@@ -61,6 +97,8 @@
   $search.addEventListener("input", () => {
     state.query = $search.value.trim();
     updateSearchClear();
+    // 홈·발견·이슈 화면에서 검색하면 전체 기사(유통 NEWS)에서 찾는다
+    if (state.query && !ARTICLE_VIEWS.has(state.view)) { location.hash = "#/retail"; return; }
     render();
   });
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
@@ -68,6 +106,12 @@
   document.getElementById("modalClose").addEventListener("click", closeModal);
   document.getElementById("modalBackdrop").addEventListener("click", closeModal);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+  document.getElementById("recentBtn").addEventListener("click", openRecentModal);
+  document.getElementById("alertBtn").addEventListener("click", () => { location.hash = "#/issues?f=follow"; });
+  document.addEventListener("click", (e) => {
+    const link = e.target.closest && e.target.closest("a[data-aid]");
+    if (link) recordRecent(link.dataset.aid);
+  });
 
   function clearSearch() {
     $search.value = "";
@@ -87,14 +131,31 @@
   /* ---------------- 라우팅 ---------------- */
 
   function route() {
-    const tab = (location.hash.replace(/^#\//, "") || "retail");
-    const valid = ["retail", "homeshopping", "scrap"];
-    // 구버전 해시(#/dashboard, #/risk, #/policy, #/ecommerce)는 유통 핫이슈로
-    state.activeTab = valid.includes(tab) ? tab : "retail";
-    document.querySelectorAll("a[data-tab]").forEach((a) => {
-      a.classList.toggle("active", a.dataset.tab === state.activeTab);
-    });
+    const r = HdCore.parseHash(location.hash);   // 구버전 해시(#/dashboard 등)는 유통 NEWS 로
+    const prevView = state.view, prevParam = state.routeParam;
+    state.view = r.view;
+    state.routeParam = r.param;
+    state.routeQuery = r.query;
+    if (r.view === "company") {
+      // 회사 페이지 = 홈쇼핑 NEWS 에서 그 회사만 고른 화면 (대시보드 + 기사)
+      state.activeTab = "homeshopping";
+      if (companyById(r.param)) state.selectedCompanies = new Set([r.param]);
+    } else {
+      state.activeTab = r.view;   // retail / homeshopping / scrap 은 기존 피드, 나머지는 새 화면
+    }
+    if (r.query.q !== undefined) {
+      state.query = r.query.q.trim();
+      $search.value = r.query.q;
+      updateSearchClear();
+    }
+    if (r.view === "issues") {
+      if (r.query.f) state.issuesFilter = r.query.f === "follow" ? "follow" : "all";
+      if (r.query.cat) state.issuesCat = r.query.cat;
+    }
+    markShortcutsSeen();
+    highlightNav();
     render();
+    if (prevView !== r.view || prevParam !== r.param) window.scrollTo(0, 0);
   }
 
   /* ---------------- 필터 ---------------- */
@@ -105,6 +166,12 @@
       arts = Object.values(state.bookmarks);
     } else if (state.activeTab === "homeshopping") {
       arts = state.articles.filter((a) => a.tabs && a.tabs.includes("homeshopping"));
+    } else if (state.view === "topic") {
+      // 주제 페이지(#/topic/risk 등): 그 태그가 붙은 기사, 노이즈 제외
+      arts = state.articles.filter((a) => !a.noise && a.tabs && a.tabs.includes(state.routeParam));
+    } else if (state.view === "risk") {
+      // 리스크 유형 페이지(#/risk/legal 등)
+      arts = state.articles.filter((a) => (a.riskCategories || []).includes(state.routeParam));
     } else {
       // 유통 피드: 노이즈(연예 등) 제외 — 검색 시에는 전체에서 찾기
       arts = state.query ? state.articles : state.articles.filter((a) => !a.noise);
@@ -175,29 +242,41 @@
   /* ---------------- 렌더 ---------------- */
 
   function render() {
+    const v = state.view === "company" ? "homeshopping" : state.view;
     let html = "";
     const searching = !!state.query;
-    if (state.activeTab === "retail" && !searching) {
-      html += renderTrendingStrip(state.trending.keywords, "📈 급상승 키워드", 12);
-      html += renderHotSection("hotRetail", "🔥 오늘의 유통 핫이슈 TOP 10");
-      html += '<div class="dash-section-title">🕐 최신 기사</div>';
-      html += renderRetailCoSlicer();
-      html += renderFilterBar(true);
-    }
-    if (state.activeTab === "homeshopping") {
-      if (!searching) {
-        html += renderTrendingStrip(state.trending.hsKeywords || [], "🔑 홈쇼핑 핫이슈 키워드 TOP 10", 10);
-        html += renderHotCompact("hotHomeshopping", "🔥 오늘의 홈쇼핑 핫이슈 TOP 10");
-        html += renderCompanyToday();
+    if (v === "home") html = renderHome();
+    else if (v === "discover") html = renderDiscover();
+    else if (v === "issues") html = renderIssuesPage();
+    else if (v === "issue") html = renderIssueDetail(state.routeParam);
+    else if (v === "companies") html = renderCompaniesPage();
+    else if (v === "trending") html = renderTrendingPage();
+    else if (v === "hot") html = renderHotPage();
+    else if (v === "topic" || v === "risk") {
+      html = renderTopicHead() + renderFilterBar(true) + renderArticleList(filterArticles());
+    } else {
+      if (v === "retail" && !searching) {
+        html += renderTrendingStrip(state.trending.keywords, "📈 급상승 키워드", 12);
+        html += renderHotSection("hotRetail", "🔥 오늘의 유통 핫이슈 TOP 10");
+        html += '<div class="dash-section-title">🕐 최신 기사</div>';
+        html += renderRetailCoSlicer();
+        html += renderFilterBar(true);
       }
-      html += '<div class="dash-section-title" id="hsFeed">📚 회사별 기사 모음</div>';
-      html += renderSlicers();
-      if (state.selectedCompanies.size === 1 && !searching) {
-        html += renderCompanyDash([...state.selectedCompanies][0]);
+      if (v === "homeshopping") {
+        if (!searching) {
+          html += renderTrendingStrip(state.trending.hsKeywords || [], "🔑 홈쇼핑 핫이슈 키워드 TOP 10", 10);
+          html += renderHotCompact("hotHomeshopping", "🔥 오늘의 홈쇼핑 핫이슈 TOP 10");
+          html += renderCompanyToday();
+        }
+        html += '<div class="dash-section-title" id="hsFeed">📚 회사별 기사 모음</div>';
+        html += renderSlicers();
+        if (state.selectedCompanies.size === 1 && !searching) {
+          html += renderCompanyDash([...state.selectedCompanies][0]);
+        }
+        html += renderFilterBar();
       }
-      html += renderFilterBar();
+      html += renderArticleList(filterArticles());
     }
-    html += renderArticleList(filterArticles());
     $main.innerHTML = html;
     bindArticleEvents();
     bindChipEvents();
@@ -205,6 +284,7 @@
     bindDashBrands();
     bindBarSearch();
     restoreBarSearchFocus();
+    bindHomeEvents();
     document.querySelectorAll(".trend-chip").forEach((el) => {
       el.addEventListener("click", () => openKeywordModal(el.dataset.kw));
     });
@@ -263,7 +343,7 @@
       const press = a.press || pressFromUrl(a.originallink || a.link);
       const heat = a.heat > 1 ? `<span class="meta-chip heat">보도 ${a.heat}건</span>` : "";
       const riskDot = a.riskScore >= 1 ? '<span class="hot-risk-dot" title="리스크 기사"></span>' : "";
-      return `<a class="hot-row" href="${escapeAttr(url)}" target="_blank" rel="noopener">
+      return `<a class="hot-row" href="${escapeAttr(url)}" data-aid="${a.id}" target="_blank" rel="noopener">
         <span class="hot-rank">${String(i + 1).padStart(2, "0")}</span>
         <span class="hot-title">${riskDot}${escapeHtml(a.title)}</span>
         <span class="hot-meta">${press ? escapeHtml(press) + " · " : ""}${formatDate(a.pubDate)}</span>
@@ -762,7 +842,7 @@
       ${rankBadge}
       ${thumb}
       <div class="card-main">
-        <div class="article-title"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a></div>
+        <div class="article-title"><a href="${escapeAttr(url)}" data-aid="${a.id}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a></div>
         ${a.description ? `<div class="article-desc">${escapeHtml(a.description)}</div>` : ""}
         <div class="article-footer">
           ${press ? `<span class="press">${escapeHtml(press)}</span><span class="dot">·</span>` : ""}
@@ -807,6 +887,7 @@
     modalKeyword = kw;
     modalReopen = () => openArticlesModal(title, arts, kw);
     document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalGoTab").hidden = !kw;
     document.getElementById("modalBody").innerHTML = arts.length
       ? `<div class="article-list">${arts.map((a) => renderCard(a)).join("")}</div>`
       : '<div class="empty-state">관련 기사가 없습니다.</div>';
@@ -849,6 +930,9 @@
         else if (key.startsWith("tp:")) toggleSet(state.selectedTypes, key.slice(3));
         else if (key.startsWith("cs:")) state.coScope = key.slice(3);
         else if (key.startsWith("so:")) state.sortOrder = key.slice(3);
+        else if (key.startsWith("if:")) state.issuesFilter = key.slice(3);
+        else if (key.startsWith("ic:")) state.issuesCat = key.slice(3);
+        else if (key.startsWith("dc:")) state.discoverCat = key.slice(3);
         else if (key.startsWith("pd:")) {
           const v = key.slice(3);
           state.periodDays = v === "all" ? null : Number(v);
@@ -926,6 +1010,395 @@
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     document.getElementById("themeToggle").textContent = dark ? "☀️" : "🌙";
     try { localStorage.setItem(THEME_KEY, dark ? "dark" : "light"); } catch (e) { /* 무시 */ }
+  }
+
+  /* ================= 모바일 개편: 홈 / 이슈 타임라인 / 발견 ================= */
+  // 순수 계산(새 기사 판정·배지·그룹핑·라우트 파싱)은 issues-core.js 의 HdCore 에 있고, 여기서는 그리기와 저장만 한다.
+
+  const ISSUE_CATS = [["all", "전체"], ["retail", "유통"], ["homeshopping", "홈쇼핑"], ["policy", "정책"], ["ecommerce", "e커머스"], ["risk", "리스크"]];
+  const TOPIC_TITLE = {
+    risk: ["🚨", "리스크 기사"], policy: ["⚖️", "정책·규제 기사"], ecommerce: ["🛒", "e커머스 기사"],
+    homeshopping: ["🛍️", "홈쇼핑 기사"], retail: ["🔥", "유통 기사"],
+  };
+  const BELL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+
+  function loadJson(key, fallback) {
+    try {
+      const v = JSON.parse(localStorage.getItem(key));
+      return v === null || v === undefined ? fallback : v;
+    } catch (e) {
+      return fallback;
+    }
+  }
+  function saveJson(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* 저장 공간 초과 등 — 무시 */ }
+  }
+  function articleById(id) { return state.articles.find((a) => a.id === id); }
+  function companyById(id) { return (state.config.companies || []).find((c) => c.id === id); }
+  function issueById(id) { return state.issues.find((i) => i.id === id); }
+  function kstToday() { return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }); }
+
+  /* ----- 내비게이션 강조 ----- */
+
+  function navKey() {
+    const v = state.view;
+    if (v === "issue") return "issues";
+    if (v === "company") return "homeshopping";
+    if (v === "topic" && state.routeParam === "risk") return "risk";
+    return v;
+  }
+  function bottomKey() {
+    const v = state.view;
+    if (v === "issue") return "issues";
+    if (v === "company") return "companies";
+    return v;
+  }
+  function highlightNav() {
+    const key = navKey(), bkey = bottomKey();
+    document.querySelectorAll("a[data-tab]").forEach((a) => a.classList.toggle("active", a.dataset.tab === key));
+    document.querySelectorAll("a[data-nav]").forEach((a) => a.classList.toggle("active", a.dataset.nav === bkey));
+  }
+
+  /* ----- 바로가기 (config/shortcuts.json) ----- */
+
+  function shortcutHref(target) {
+    const t = target || {};
+    switch (t.type) {
+      case "trending": return "#/trending";
+      case "hot": return "#/hot";
+      case "topic": return `#/topic/${t.value}`;
+      case "risk": return `#/risk/${t.value}`;
+      case "tab": return `#/${t.value}`;
+      case "company": return `#/company/${t.value}`;
+      case "query": return `#/retail?q=${encodeURIComponent(t.value || "")}`;
+      default: return "#/home";
+    }
+  }
+  function normHash(h) {
+    const raw = String(h || "").replace(/^#/, "");
+    try { return decodeURIComponent(raw); } catch (e) { return raw; }
+  }
+  // 바로가기가 가리키는 화면에 들어오면 '봤음'으로 기록 → 홈의 N 배지가 사라진다
+  function markShortcutsSeen() {
+    const cur = normHash(location.hash);
+    let changed = false;
+    state.shortcuts.forEach((sc) => {
+      if (normHash(shortcutHref(sc.target)) === cur) {
+        state.shortcutSeen[sc.id] = Date.now();
+        changed = true;
+      }
+    });
+    if (changed) saveJson(SHORTCUT_SEEN_KEY, state.shortcutSeen);
+  }
+  function renderShortcuts() {
+    if (!state.shortcuts.length) return "";
+    const ctx = {
+      articles: state.articles, nowMs: Date.now(),
+      briefingAt: state.briefing && state.briefing.generatedAt,
+      trendingAt: state.trending && state.trending.generatedAt,
+    };
+    const items = state.shortcuts.map((sc) => {
+      const n = HdCore.newCountFor(sc.target, Object.assign({ seenAtMs: state.shortcutSeen[sc.id] || 0 }, ctx));
+      const badge = n ? `<span class="sc-badge" role="img" aria-label="새 기사 ${n}건">N</span>` : "";
+      return `<a class="sc-item" href="${escapeAttr(shortcutHref(sc.target))}">
+        <span class="sc-icon">${escapeHtml(sc.icon || "•")}${badge}</span>
+        <span class="sc-label">${escapeHtml(sc.label)}</span></a>`;
+    }).join("");
+    return `<div class="home-shortcuts">${items}</div>`;
+  }
+
+  /* ----- 홈: 내 회사 / 회사 선택 / 지금 뜨는 이슈 ----- */
+
+  // 최근 24시간 기준 (자정 직후 '오늘'이 비어 보이는 문제를 피하고, 핫이슈 랭킹과 같은 창을 쓴다)
+  function recentStats(coId) {
+    const since = Date.now() - 24 * 3600e3;
+    let main = 0, mention = 0, risk = 0;
+    const latest = [];
+    state.articles.forEach((a) => {
+      if (a.noise || !a.pubDate || Date.parse(a.pubDate) < since) return;
+      if ((a.mainCompanies || []).includes(coId)) {
+        main++;
+        if (a.riskScore >= 1) risk++;
+        latest.push(a);
+      } else if ((a.companies || []).includes(coId)) {
+        mention++;
+      }
+    });
+    latest.sort(cmpDate);
+    return { main, mention, risk, latest };
+  }
+
+  function renderMyCompanyCard() {
+    const co = companyById(state.myCompany);
+    if (!co) return "";
+    const s = recentStats(co.id);
+    const items = s.latest.slice(0, 3).map((a) =>
+      `<li><a href="${escapeAttr(a.link || a.originallink || "#")}" data-aid="${a.id}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a> <span class="rel">${formatRelative(a.pubDate)}</span></li>`).join("");
+    return `<section class="my-co" style="--co:${escapeAttr(co.color || "var(--ink)")}">
+      <div class="my-co-head"><span class="co-dash-tag">${escapeHtml(co.short || co.name)}</span><b>${escapeHtml(co.name)}</b> <span class="my-co-range">지난 24시간</span><span class="spacer"></span>
+        <button type="button" class="link-btn" id="myCompanyChange">변경</button></div>
+      <div class="my-co-stats"><span><b>${s.main}</b>주요 기사</span><span><b>${s.mention}</b>언급</span><span><b class="${s.risk ? "risk" : ""}">${s.risk}</b>리스크</span>
+        <a class="more-link" href="#/company/${co.id}">대시보드 →</a></div>
+      ${items ? `<ul class="my-co-list">${items}</ul>` : '<div class="co-dash-empty">지난 24시간 주요 기사가 없어요.</div>'}
+    </section>`;
+  }
+
+  function renderCompanyCircles() {
+    const cos = state.config.companies || [];
+    if (!cos.length) return "";
+    const badges = HdCore.companyBadges(cos, state.articles, Date.now());
+    const my = companyById(state.myCompany);
+    let html = `<div class="home-row-head"><div class="dash-section-title">어느 회사를 보시나요?</div>
+      <button type="button" class="my-co-btn" id="myCompanyBtn" title="홈 상단에 고정할 내 회사 선택">📍 ${my ? escapeHtml(my.short || my.name) : "내 회사"}</button></div>`;
+    html += '<div class="co-scroll">' + cos.map((c) => {
+      const b = badges[c.id];
+      const badge = b === "risk" ? '<span class="co-badge risk">주의</span>' : b === "hot" ? '<span class="co-badge hot">인기</span>' : "";
+      return `<a class="co-circle-item${state.myCompany === c.id ? " mine" : ""}" href="#/company/${c.id}" title="${escapeAttr(c.name)}">
+        <span class="co-circle" style="--co:${escapeAttr(c.color || "#999")}">${escapeHtml(c.short || c.name)}${badge}</span>
+        <span class="co-circle-name">${escapeHtml(c.name)}</span></a>`;
+    }).join("") + "</div>";
+    return html;
+  }
+
+  function renderHomeIssues() {
+    const since = Date.now() - 24 * 3600e3;
+    const hot = HdCore.sortByScore(state.issues.filter((i) => Date.parse(i.lastAt) >= since)).slice(0, 5);
+    if (!hot.length) return "";
+    return `<div class="section-head"><div class="dash-section-title">🗞️ 지금 뜨는 이슈</div><a class="more-link" href="#/issues">이슈 타임라인 →</a></div>
+      <div class="section-sub">최근 24시간, 보도가 많이 몰린 순</div>
+      <div class="issue-list">${hot.map(renderIssueRow).join("")}</div>`;
+  }
+
+  function renderHome() {
+    return renderMyCompanyCard()
+      + '<div class="dash-section-title home-title">⚡ 바로가기</div>' + renderShortcuts()
+      + renderCompanyCircles()
+      + renderHomeIssues();
+  }
+
+  /* ----- 이슈 타임라인 ----- */
+
+  function issueNewFlag(issue) {
+    const f = state.follows[issue.id];
+    return f ? HdCore.followHasNew(issue, f) : HdCore.issueIsNew(issue, state.issueSeen[issue.id], Date.now());
+  }
+
+  function renderIssueRow(issue) {
+    const on = !!state.follows[issue.id];
+    const riskDot = issue.riskMax >= 1 ? '<span class="hot-risk-dot" title="리스크 이슈"></span>' : "";
+    return `<div class="issue-row">
+      <a class="issue-main" href="#/issue/${encodeURIComponent(issue.id)}">
+        <div class="issue-title">${riskDot}<span>${escapeHtml(issue.title)}</span>${issueNewFlag(issue) ? '<span class="new-badge">NEW</span>' : ""}</div>
+        <div class="issue-meta">${HdCore.compressLabel(issue.count)} · ${HdCore.relativeTime(issue.lastAt)}</div>
+      </a>
+      <button type="button" class="follow-btn${on ? " on" : ""}" data-issue="${escapeAttr(issue.id)}" aria-pressed="${on}" title="${on ? "팔로우 해제" : "팔로우 — 새 기사가 붙으면 알려줘요"}">${BELL_SVG}</button>
+    </div>`;
+  }
+
+  function renderIssuesPage() {
+    const f = state.issuesFilter, cat = state.issuesCat;
+    const followN = Object.keys(state.follows).length;
+    const meta = state.issuesMeta || {};
+    let html = `<div class="page-head"><h1 class="page-title">이슈 타임라인 <span class="beta">Beta</span></h1>
+      <div class="page-sub">같은 사건을 다룬 기사를 하나로 묶어 시간 순으로 정리했어요 · 최근 ${meta.windowHours || 72}시간</div></div>`;
+    html += '<div class="chip-row">' + chip("if:all", "전체", f === "all", "")
+      + chip("if:follow", "팔로우", f === "follow", followN ? `<span class="cnt">${followN}</span>` : "") + "</div>";
+    html += '<div class="chip-row chip-row-sm">' + ISSUE_CATS.map(([k, label]) => chip("ic:" + k, label, cat === k, "")).join("") + "</div>";
+    const list = HdCore.filterIssues(state.issues, { cat, onlyFollowed: f === "follow", follows: state.follows });
+    const ended = f === "follow" ? HdCore.endedFollowIds(state.follows, state.issues) : [];
+    if (!list.length && !ended.length) {
+      html += `<div class="empty-state">${f === "follow"
+        ? "팔로우한 이슈가 없어요. 이슈 옆 종 아이콘을 누르면 새 기사가 붙을 때 알려드려요."
+        : "이 분류의 이슈가 아직 없어요."}</div>`;
+      return html;
+    }
+    html += '<div class="issue-list">' + list.map(renderIssueRow).join("");
+    html += ended.map((id) => {
+      const f2 = state.follows[id] || {};
+      return `<div class="issue-row ended"><div class="issue-main">
+        <div class="issue-title"><span>${escapeHtml(f2.title || id)}</span><span class="new-badge ended">종료됨</span></div>
+        <div class="issue-meta">최근 ${meta.windowHours || 72}시간 목록에서 내려간 이슈예요</div></div>
+        <button type="button" class="follow-btn on" data-issue="${escapeAttr(id)}" title="팔로우 해제">${BELL_SVG}</button></div>`;
+    }).join("");
+    return html + "</div>";
+  }
+
+  function fmtDateLabel(ymd) {
+    const d = new Date(ymd + "T00:00:00");
+    if (isNaN(d)) return escapeHtml(ymd || "");
+    return `${ymd.replace(/-/g, ".")} (${WEEKDAY[d.getDay()]})${ymd === kstToday() ? " · 오늘" : ""}`;
+  }
+
+  function renderTimelineItem(a) {
+    const riskClass = a.riskScore >= 3 ? "risk-3" : a.riskScore === 2 ? "risk-2" : a.riskScore === 1 ? "risk-1" : "";
+    const url = a.link || a.originallink || "#";
+    const press = a.press || pressFromUrl(a.originallink || a.link);
+    const marked = !!state.bookmarks[a.id];
+    return `<div class="tl-item ${riskClass}">
+      <span class="tl-time">${escapeHtml((a.pubDate || "").slice(11, 16))}</span>
+      <div class="tl-body">
+        <a class="tl-title" href="${escapeAttr(url)}" data-aid="${a.id}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a>
+        <div class="tl-meta">${press ? `<span class="press">${escapeHtml(press)}</span>` : ""}${a.heat > 1 ? `<span class="meta-chip heat">보도 ${a.heat}건</span>` : ""}
+          <button class="bookmark-btn${marked ? " on" : ""}" data-id="${a.id}" title="스크랩">${marked ? "★" : "☆"}</button></div>
+      </div></div>`;
+  }
+
+  function renderIssueDetail(id) {
+    const issue = issueById(id);
+    if (!issue) {
+      return `<a class="back-link" href="#/issues">← 이슈 타임라인</a>
+        <div class="empty-state">이 이슈는 최근 목록에서 내려갔어요.</div>`;
+    }
+    // 열람 기록 → NEW 해제 (팔로우 중이면 알림 점도 해제)
+    state.issueSeen[id] = Date.now();
+    saveJson(ISSUE_SEEN_KEY, state.issueSeen);
+    if (state.follows[id] && state.follows[id].seenLastAt !== issue.lastAt) {
+      state.follows[id].seenLastAt = issue.lastAt;
+      saveJson(FOLLOWS_KEY, state.follows);
+    }
+    updateAlertDots();
+    const arts = issue.articleIds.map(articleById).filter(Boolean);
+    const rep = articleById(issue.repArticleId) || arts[0];
+    const cos = (issue.companies || []).map((cid) => {
+      const c = companyById(cid);
+      return c ? `<span class="meta-chip co">${escapeHtml(c.name)}</span>` : "";
+    }).join("");
+    const risks = (issue.riskCategories || []).map((rid) => {
+      const rc = state.config.riskCategories.find((x) => x.id === rid);
+      return rc ? `<span class="meta-chip risk">${escapeHtml(rc.name)}</span>` : "";
+    }).join("");
+    const on = !!state.follows[id];
+    let html = `<a class="back-link" href="#/issues">← 이슈 타임라인</a>
+      <section class="issue-head">
+        <h1>${escapeHtml(issue.title)}</h1>
+        <div class="issue-head-meta"><span>기사 ${issue.articles}건 · 보도 ${issue.count}건</span><span class="dot">·</span>
+          <span>${formatDate(issue.firstAt)} ~ ${formatDate(issue.lastAt)}</span>${cos}${risks}</div>
+        ${rep && rep.description ? `<div class="issue-summary">${escapeHtml(rep.description)}</div>` : ""}
+        <div class="issue-head-actions">
+          <button type="button" class="follow-pill${on ? " on" : ""}" data-issue="${escapeAttr(id)}" aria-pressed="${on}">${BELL_SVG} ${on ? "팔로우 중" : "팔로우"}</button>
+          <span class="section-sub" style="margin:0">${on ? "새 기사가 붙으면 NEW 와 알림 점으로 알려드려요" : "팔로우하면 후속 보도를 놓치지 않아요"}</span></div>
+      </section>`;
+    if (!arts.length) return html + '<div class="empty-state">이 이슈의 기사를 불러오지 못했어요.</div>';
+    html += '<div class="timeline">' + HdCore.groupByDate(arts).map((g) =>
+      `<div class="tl-date">${fmtDateLabel(g.date)}</div>` + g.items.map(renderTimelineItem).join("")).join("") + "</div>";
+    return html;
+  }
+
+  function toggleFollow(id) {
+    const issue = issueById(id);
+    if (state.follows[id]) {
+      delete state.follows[id];
+    } else {
+      const nowIso = new Date().toISOString();
+      state.follows[id] = { followedAt: nowIso, seenLastAt: issue ? issue.lastAt : nowIso, title: issue ? issue.title : id };
+    }
+    saveJson(FOLLOWS_KEY, state.follows);
+    updateAlertDots();
+    render();
+  }
+
+  // 팔로우한 이슈에 새 기사가 붙었으면 헤더 종·하단 '이슈' 탭·사이드바에 점을 켠다
+  function updateAlertDots() {
+    const hasNew = Object.entries(state.follows).some(([id, f]) => {
+      const i = issueById(id);
+      return !!i && HdCore.followHasNew(i, f);
+    });
+    document.querySelectorAll(".alert-dot").forEach((el) => { el.hidden = !hasNew; });
+  }
+
+  /* ----- 발견 / 회사 / 주제 페이지 ----- */
+
+  function renderCompanyCard(c) {
+    const s = recentStats(c.id);
+    return `<a class="co-card" href="#/company/${c.id}" style="--co:${escapeAttr(c.color || "#999")}">
+      <span class="co-dash-tag">${escapeHtml(c.short || c.name)}</span><span class="name">${escapeHtml(c.name)}</span>
+      <div class="stats">24시간 주요 <b>${s.main}</b>건${s.mention ? ` · 언급 ${s.mention}` : ""}<br>${s.risk ? `<span class="risk">⚠ 리스크 ${s.risk}건</span>` : "리스크 없음"}</div></a>`;
+  }
+
+  function renderDiscover() {
+    const cat = state.discoverCat;
+    let html = `<div class="page-head"><h1 class="page-title">발견</h1><div class="page-sub">분류별로 이슈·회사·급상승 키워드를 둘러보세요</div></div>`;
+    html += '<div class="chip-row">' + ISSUE_CATS.map(([k, label]) => chip("dc:" + k, label, cat === k, "")).join("") + "</div>";
+    const issues = HdCore.sortByScore(HdCore.filterIssues(state.issues, { cat })).slice(0, 6);
+    html += `<div class="section-head"><div class="dash-section-title">이슈 타임라인</div><a class="more-link" href="#/issues?cat=${cat}">더 보기</a></div>
+      <div class="section-sub">시간 순으로 핵심만 정리했어요</div>`;
+    html += issues.length
+      ? '<div class="issue-chips">' + issues.map((i) =>
+        `<a class="issue-chip" href="#/issue/${encodeURIComponent(i.id)}" title="${escapeAttr(i.title)}"><span class="t">${escapeHtml(i.title)}</span>${issueNewFlag(i) ? '<span class="n">N</span>' : ""}</a>`).join("") + "</div>"
+      : '<div class="co-dash-empty">이 분류의 이슈가 아직 없어요.</div>';
+    if (cat === "all" || cat === "homeshopping") {
+      html += `<div class="section-head"><div class="dash-section-title">회사 대시보드</div><a class="more-link" href="#/companies">전체 보기</a></div>
+        <div class="section-sub">최근 24시간 주요 기사와 리스크 건수</div>`;
+      html += '<div class="co-cards">' + (state.config.companies || []).map(renderCompanyCard).join("") + "</div>";
+    }
+    const kws = cat === "homeshopping" ? (state.trending.hsKeywords || []) : (state.trending.keywords || []);
+    html += renderTrendingStrip(kws, "📈 급상승 키워드", 10);
+    return html;
+  }
+
+  function renderCompaniesPage() {
+    return `<div class="page-head"><h1 class="page-title">회사</h1><div class="page-sub">홈쇼핑 12개사 — 누르면 회사 대시보드와 기사로 이동해요</div></div>
+      <div class="co-grid">${(state.config.companies || []).map(renderCompanyCard).join("")}</div>`;
+  }
+
+  function renderTopicHead() {
+    if (state.view === "risk") {
+      const rc = state.config.riskCategories.find((x) => x.id === state.routeParam);
+      return `<div class="page-head"><a class="back-link" href="#/home">← 홈</a><h1 class="page-title">⚠ ${escapeHtml(rc ? rc.name : state.routeParam)}</h1>
+        <div class="page-sub">이 유형의 리스크 키워드가 잡힌 기사 · 최근 7일</div></div>`;
+    }
+    const t = TOPIC_TITLE[state.routeParam] || ["📰", state.routeParam];
+    return `<div class="page-head"><a class="back-link" href="#/home">← 홈</a><h1 class="page-title">${t[0]} ${escapeHtml(t[1])}</h1><div class="page-sub">최근 7일 · 최신순</div></div>`;
+  }
+
+  function renderTrendingPage() {
+    return `<div class="page-head"><a class="back-link" href="#/home">← 홈</a><h1 class="page-title">📈 급상승 키워드</h1>
+      <div class="page-sub">최근 24시간에 이전 3일 평균보다 많이 나온 단어 · 누르면 관련 기사</div></div>`
+      + renderTrendingStrip(state.trending.keywords, "유통 전체", 20)
+      + renderTrendingStrip(state.trending.hsKeywords || [], "홈쇼핑", 10);
+  }
+
+  function renderHotPage() {
+    return `<div class="page-head"><a class="back-link" href="#/home">← 홈</a><h1 class="page-title">🔥 핫이슈 TOP 10</h1>
+      <div class="page-sub">보도량 + 리스크 점수 순 · 최근 24시간</div></div>`
+      + renderHotSection("hotRetail", "유통") + renderHotCompact("hotHomeshopping", "홈쇼핑");
+  }
+
+  /* ----- 최근 본 기사 / 내 회사 선택 / 이벤트 ----- */
+
+  function recordRecent(id) {
+    if (!id) return;
+    state.recent = [id].concat(state.recent.filter((x) => x !== id)).slice(0, 20);
+    saveJson(RECENT_KEY, state.recent);
+  }
+  function openRecentModal() {
+    const arts = state.recent.map((id) => articleById(id) || state.bookmarks[id]).filter(Boolean);
+    openArticlesModal(`🕒 최근 본 기사 ${arts.length}건`, arts, "");
+  }
+  function openMyCompanyModal() {
+    document.getElementById("modalTitle").textContent = "📍 내 회사 선택";
+    document.getElementById("modalGoTab").hidden = true;
+    document.getElementById("modalBody").innerHTML = `<div class="section-sub">홈 상단에 이 회사의 오늘 요약을 고정해요. 이 기기에만 저장됩니다.</div>
+      <div class="pick-grid">${(state.config.companies || []).map((c) =>
+        `<button type="button" class="pick-co${state.myCompany === c.id ? " on" : ""}" data-pick="${c.id}" style="--co:${escapeAttr(c.color || "#999")}">${escapeHtml(c.short || c.name)}<small>${escapeHtml(c.name)}</small></button>`).join("")}</div>
+      ${state.myCompany ? '<button type="button" class="pick-clear" data-pick="">내 회사 해제</button>' : ""}`;
+    document.getElementById("modal").hidden = false;
+    document.body.style.overflow = "hidden";
+    document.querySelectorAll("#modalBody [data-pick]").forEach((el) => el.addEventListener("click", () => {
+      state.myCompany = el.dataset.pick || "";
+      saveJson(MY_COMPANY_KEY, state.myCompany);
+      closeModal();
+      render();
+    }));
+  }
+  function bindHomeEvents() {
+    document.querySelectorAll(".follow-btn[data-issue], .follow-pill[data-issue]").forEach((el) => {
+      el.addEventListener("click", () => toggleFollow(el.dataset.issue));
+    });
+    ["myCompanyBtn", "myCompanyChange"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("click", openMyCompanyModal);
+    });
   }
 
   /* ---------------- 포맷 ---------------- */

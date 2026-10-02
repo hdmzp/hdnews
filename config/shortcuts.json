@@ -1,0 +1,111 @@
+{
+  "_comment": "홈 화면 바로가기. target.type: trending | hot | topic(탭 id) | risk(리스크 카테고리 id) | query(검색어) | tab(retail/homeshopping/scrap) | company(회사 id). 항목을 고치면 사이트 새로고침 시 바로 반영된다.",
+  "shortcuts": [
+    {
+      "id": "trending",
+      "label": "급상승",
+      "icon": "📈",
+      "target": {
+        "type": "trending"
+      }
+    },
+    {
+      "id": "hot",
+      "label": "핫이슈 TOP10",
+      "icon": "🔥",
+      "target": {
+        "type": "hot"
+      }
+    },
+    {
+      "id": "risk",
+      "label": "리스크",
+      "icon": "🚨",
+      "target": {
+        "type": "topic",
+        "value": "risk"
+      }
+    },
+    {
+      "id": "reapproval",
+      "label": "재승인·인허가",
+      "icon": "📜",
+      "target": {
+        "type": "risk",
+        "value": "reapproval"
+      }
+    },
+    {
+      "id": "fee",
+      "label": "송출수수료",
+      "icon": "📡",
+      "target": {
+        "type": "query",
+        "value": "송출수수료"
+      }
+    },
+    {
+      "id": "broadcast",
+      "label": "방송사고·심의",
+      "icon": "📺",
+      "target": {
+        "type": "risk",
+        "value": "broadcast"
+      }
+    },
+    {
+      "id": "ppl",
+      "label": "뒷광고·PPL",
+      "icon": "🎭",
+      "target": {
+        "type": "risk",
+        "value": "ad"
+      }
+    },
+    {
+      "id": "assembly",
+      "label": "국회·국감",
+      "icon": "🏛️",
+      "target": {
+        "type": "risk",
+        "value": "assembly"
+      }
+    },
+    {
+      "id": "consumer",
+      "label": "소비자 피해",
+      "icon": "🛡️",
+      "target": {
+        "type": "risk",
+        "value": "consumer"
+      }
+    },
+    {
+      "id": "ecommerce",
+      "label": "e커머스",
+      "icon": "🛒",
+      "target": {
+        "type": "topic",
+        "value": "ecommerce"
+      }
+    },
+    {
+      "id": "policy",
+      "label": "정책",
+      "icon": "⚖️",
+      "target": {
+        "type": "topic",
+        "value": "policy"
+      }
+    },
+    {
+      "id": "homeshopping",
+      "label": "홈쇼핑 전체",
+      "icon": "🛍️",
+      "target": {
+        "type": "tab",
+        "value": "homeshopping"
+      }
+    }
+  ]
+}

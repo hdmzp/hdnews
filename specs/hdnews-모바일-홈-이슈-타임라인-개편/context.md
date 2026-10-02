@@ -1,0 +1,34 @@
+# hdnews 모바일 홈·이슈 타임라인 개편 — 작업 기록 (context)
+
+## Current Status
+- Active Spec Path: `specs/hdnews-모바일-홈-이슈-타임라인-개편` (prd.md / spec.md / plan.md / context.md)
+- 2026-10-01: 기획 초안 작성. 연동 저장소 `hdmzp/hdnews` 구조(README, index.html, app.js, collect.py, keywords.json, briefing/trending.json) 조사 완료. 사용자 업로드 참고 스크린샷 3장(캐치테이블 홈, 뉴닉 이슈 타임라인, 뉴닉 발견 탭)을 기능으로 매핑해 prd/spec/plan 반영.
+- 2026-10-01: 사용자 확인 완료 — 참고 화면 3장(홈 바로가기·회사 선택, 이슈 타임라인, 발견 탭·하단 내비)을 모두 반영. '내 회사'는 기본값 없이 사용자가 직접 지정.
+- 2026-10-01: 작업 모드 전환. 연동 저장소 `hdmzp/hdnews` 의 main 을 워크스페이스에 가져옴(shallow fetch, HEAD `bcfa5d2`). 프로젝트 분석: 정적 사이트(index.html + assets/ + data/) + GitHub Actions 수집기(`scripts/collect.py`, Python 표준 라이브러리만 사용, 설치 의존성 없음). dev/preview 서버는 단일 frontend 서비스 `python3 -m http.server 30015 --bind 0.0.0.0`(backend 포트 40015 미사용). 재현용 `Dockerfile`·`docker-compose.yml`·`.dockerignore` 추가(미커밋).
+- 2026-10-02: Phase 1~4 구현 완료, Phase 5 문서 갱신 완료. 작업 브랜치 `feature/mobile-issue-timeline`(main 기준). 수집기 `build_issues`(72h 이슈 묶음·id 승계) + `data/issues.json`(391건, 291KB), 순수 로직 모듈 `assets/issues-core.js` + Node 테스트 9건, 홈/발견/이슈 타임라인/회사/주제 화면 + 하단 내비 + 바로가기 설정 `config/shortcuts.json`, README 갱신.
+- 남은 일: 사용자 확인 후 커밋 push → GitHub Pages 배포 확인, Actions 첫 수집 후 `issues.json` 자동 갱신 확인. 바로가기 항목 구성·순서는 `config/shortcuts.json`에서 언제든 조정.
+
+## Decision Log
+- D1 (2026-10-01): 기존 hdnews 정적 사이트(바닐라 JS + GitHub Actions 수집기) 구조를 유지·확장한다. 이유: 서버·비용 없는 운영 모델과 기존 데이터·기능 재사용. 새 프레임워크 전환은 Non-Goal.
+- D2 (2026-10-01): 이슈 묶음은 브라우저가 아니라 수집기(`collect.py`)에서 생성해 `data/issues.json`으로 배포한다. 이유: 12MB `articles.json`을 모바일에서 클러스터링하면 느리고, 이슈 id 안정성(팔로우 유지)을 수집기에서 보장해야 함.
+- D3 (2026-10-01): 팔로우·열람 기록·N 배지·내 회사는 localStorage(로그인 없음). 기존 스크랩과 동일 정책.
+- D4 (2026-10-01): 모바일 하단 내비 5개(홈/발견/이슈/스크랩/회사), PC는 기존 사이드바에 메뉴만 추가.
+- D5 (2026-10-01, 사용자 결정): 세 참고 화면을 모두 한 기획에 반영한다. '내 회사' 기본값은 두지 않고 사용자가 직접 선택한다.
+- D6 (2026-10-01): dev/preview 서버는 Python 표준 `http.server` 로 저장소 파일을 그대로 서빙한다(README 로컬 테스트 방식과 동일). 이유: 빌드 도구·의존성 없음, Studio preview 이미지(`namsangboy/aplus_dev_node24`)에 python3 3.11 포함 확인.
+- D7 (2026-10-01): 기획 번들은 Studio 가 spec-patch 로 생성한 `specs/hdnews-모바일-홈-이슈-타임라인-개편/` 하나로 통합하고, 영문 슬러그 폴더(`hdnews-mobile-issue-timeline`)는 제거. `.ax/state.json` 의 plan.filePath 도 이 경로로 갱신.
+- D8 (2026-10-02): 이슈 묶음 기준은 실데이터로 보정 — 제목 토큰 공유 ≥2 · Jaccard ≥0.4 · 단일 연결, 서로 다른 기사 ≥2 + 보도(heat 합) ≥3. 이유: heat≥3 인 단일 전재 기사가 1,670건이라 '보도 3건'만으로는 이슈가 수천 개가 되고, 0.3 이하 유사도는 연쇄 병합(최대 113건)이 생김. 결과 391개/72h, 최대 묶음 71건(컬리×아모레 협업)으로 응집도 양호.
+- D9 (2026-10-02): 회사 배지·내 회사 카드·회사 카드의 집계 창은 '오늘(KST)'이 아니라 최근 24시간. 이유: 자정~아침에는 '오늘' 집계가 거의 0이라 화면이 비어 보이고, 핫이슈 랭킹과 같은 창을 써야 일관됨.
+- D10 (2026-10-02): NEW 배지는 열람 기록이 없으면 lastAt 24시간 이내인 이슈에만 표시. 이유: 첫 방문에 391개 전부 NEW 로 표시되는 것을 피함. 팔로우 이슈는 seenLastAt 기준 그대로.
+- D11 (2026-10-02): 프런트 검증은 Playwright(스크래치 디렉터리, 프로젝트 의존성 아님)로 라이브 프리뷰(30015)를 자동 점검. 프로젝트에는 Node 의존성·package.json 을 추가하지 않고 `node --test` 표준 러너만 사용.
+
+## Verification Log
+- 2026-10-01 `python3 scripts/collect.py --selftest` → `hsdash selftest OK`, `selftest OK`
+- 2026-10-01 정적 서버 smoke(임시 포트 38015, 동일 명령 형태): `/` 200 text/html 3058B · `/assets/app.js` 200 · `/data/briefing.json` 200 · `/data/articles.json` 200 (12MB, 0.014s)
+- 2026-10-01 `docker compose config -q` OK. 할당 포트 30015/40015 미점유 확인(`ss -ltnp`).
+- 2026-10-02 `python3 scripts/collect.py --selftest` → 이슈 묶음(3건 묶음·2건 제외·단일 전재 제외·노이즈 제외·대표 기사·회사/리스크 집계)·id 승계(창 밖 기사 제거·분할·병합) 테스트 포함 `selftest OK`
+- 2026-10-02 `node --test tests/*.test.js` → 9/9 통과 (상대 시각, 라우트 파싱, NEW/팔로우 판정, 팔로우 이동, 바로가기 매칭·새 기사 수, 회사 배지, 날짜 그룹, 이슈 필터·정렬)
+- 2026-10-02 Playwright 브라우저 점검(390×844 모바일 + 1280×900 PC, 라이브 프리뷰 30015) → 25개 항목 PASS, 콘솔/페이지 오류 0: AC1 그리드·가로스크롤 없음, AC2 N 배지 소멸, AC3 인기 ≤3, AC6 압축 문구·최신순·NEW, AC7 날짜 구분선·최신순·열람 후 알림 해제·★, AC8 팔로우 유지·필터·알림 점, AC9 발견 칩 311ms·더 보기 링크, F1 내 회사, 검색 리다이렉트, AC10 기존 라우트 9종·구버전 해시·PC 하단 내비 숨김
+- 2026-10-02 스크린샷 확인: 모바일 홈/이슈/상세/발견/회사/리스크, PC 홈·이슈(다크 테마 포함) 레이아웃 정상
+
+## Next Step
+- 사용자가 프리뷰에서 확인 → 수정 요청 반영 → `feature/mobile-issue-timeline` 브랜치 push 및 PR(사용자 요청 시) → GitHub Pages 배포 후 라이브에서 `#/home` 기본 진입과 Actions 수집 뒤 `data/issues.json` 자동 갱신 확인.
