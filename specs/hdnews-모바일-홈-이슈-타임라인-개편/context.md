@@ -6,7 +6,8 @@
 - 2026-10-01: 사용자 확인 완료 — 참고 화면 3장(홈 바로가기·회사 선택, 이슈 타임라인, 발견 탭·하단 내비)을 모두 반영. '내 회사'는 기본값 없이 사용자가 직접 지정.
 - 2026-10-01: 작업 모드 전환. 연동 저장소 `hdmzp/hdnews` 의 main 을 워크스페이스에 가져옴(shallow fetch, HEAD `bcfa5d2`). 프로젝트 분석: 정적 사이트(index.html + assets/ + data/) + GitHub Actions 수집기(`scripts/collect.py`, Python 표준 라이브러리만 사용, 설치 의존성 없음). dev/preview 서버는 단일 frontend 서비스 `python3 -m http.server 30015 --bind 0.0.0.0`(backend 포트 40015 미사용). 재현용 `Dockerfile`·`docker-compose.yml`·`.dockerignore` 추가(미커밋).
 - 2026-10-02: Phase 1~4 구현 완료, Phase 5 문서 갱신 완료. 작업 브랜치 `feature/mobile-issue-timeline`(main 기준). 수집기 `build_issues`(72h 이슈 묶음·id 승계) + `data/issues.json`(391건, 291KB), 순수 로직 모듈 `assets/issues-core.js` + Node 테스트 9건, 홈/발견/이슈 타임라인/회사/주제 화면 + 하단 내비 + 바로가기 설정 `config/shortcuts.json`, README 갱신.
-- 남은 일: 사용자 확인 후 커밋 push → GitHub Pages 배포 확인, Actions 첫 수집 후 `issues.json` 자동 갱신 확인. 바로가기 항목 구성·순서는 `config/shortcuts.json`에서 언제든 조정.
+- 2026-10-02 08:04~08:05 UTC: 배포 완료. `feature/mobile-issue-timeline` push → PR #23(https://github.com/hdmzp/hdnews/pull/23) → main 머지(`6fb7e0b`, merge commit) → GitHub Pages 배포 success(약 30초) → 라이브 https://hdmzp.github.io/hdnews/ 에서 `app.js?v=21`·`issues-core.js?v=1`·`style.css?v=19`·`data/issues.json`·`config/shortcuts.json` 확인.
+- 남은 일: 다음 Actions 수집(30분 주기) 뒤 `data/issues.json`이 새 기사로 자동 갱신되는지 확인. 바로가기 항목 구성·순서는 `config/shortcuts.json`에서 언제든 조정.
 
 ## Decision Log
 - D1 (2026-10-01): 기존 hdnews 정적 사이트(바닐라 JS + GitHub Actions 수집기) 구조를 유지·확장한다. 이유: 서버·비용 없는 운영 모델과 기존 데이터·기능 재사용. 새 프레임워크 전환은 Non-Goal.
@@ -29,6 +30,7 @@
 - 2026-10-02 `node --test tests/*.test.js` → 9/9 통과 (상대 시각, 라우트 파싱, NEW/팔로우 판정, 팔로우 이동, 바로가기 매칭·새 기사 수, 회사 배지, 날짜 그룹, 이슈 필터·정렬)
 - 2026-10-02 Playwright 브라우저 점검(390×844 모바일 + 1280×900 PC, 라이브 프리뷰 30015) → 25개 항목 PASS, 콘솔/페이지 오류 0: AC1 그리드·가로스크롤 없음, AC2 N 배지 소멸, AC3 인기 ≤3, AC6 압축 문구·최신순·NEW, AC7 날짜 구분선·최신순·열람 후 알림 해제·★, AC8 팔로우 유지·필터·알림 점, AC9 발견 칩 311ms·더 보기 링크, F1 내 회사, 검색 리다이렉트, AC10 기존 라우트 9종·구버전 해시·PC 하단 내비 숨김
 - 2026-10-02 스크린샷 확인: 모바일 홈/이슈/상세/발견/회사/리스크, PC 홈·이슈(다크 테마 포함) 레이아웃 정상
+- 2026-10-02 배포 검증: GitHub Pages deployment 6804082009 state=success(08:05:28Z). 라이브 사이트 대상 같은 Playwright 점검 25개 PASS, 콘솔/페이지 오류 0, 라이브 홈 스크린샷 확인
 
 ## Next Step
-- 사용자가 프리뷰에서 확인 → 수정 요청 반영 → `feature/mobile-issue-timeline` 브랜치 push 및 PR(사용자 요청 시) → GitHub Pages 배포 후 라이브에서 `#/home` 기본 진입과 Actions 수집 뒤 `data/issues.json` 자동 갱신 확인.
+- 운영 관찰: 다음 Actions 수집 뒤 라이브 `data/issues.json`의 generatedAt 이 갱신되고 이슈 수가 300~500 범위인지 확인. 사용자 피드백(바로가기 구성, 이슈 묶음 기준, 하단 탭 구성)을 받아 `config/shortcuts.json` / `ISSUE_*` 상수로 조정.

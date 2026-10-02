@@ -19,6 +19,6 @@
 - `#/discover` 카테고리 칩과 3개 섹션(이슈 칩·회사 카드·급상승), 모바일 하단 고정 내비 5개, PC 사이드바 메뉴 추가, `index.html` `?v=` 증가
 - 검증: AC9, AC10. 모바일(390px)/PC(1280px) 두 폭 × 다크/라이트 두 테마 스크린샷 확인
 
-## Phase 5. 운영 문서·배포 확인 — 🔶 문서 완료, 배포 확인은 push 후
+## Phase 5. 운영 문서·배포 확인 — ✅ 완료 (2026-10-02, PR #23 머지 · Pages 배포 확인)
 - README 탭 구성 표와 `shortcuts.json` 운영 가이드 갱신, GitHub Actions 수집 후 `issues.json` 커밋 확인, GitHub Pages 라이브에서 `#/home` 기본 진입 확인
 - 검증: 라이브 URL 접속 시 홈 화면 표시, Actions 로그에 이슈 생성 건수 출력, 기존 사용자 북마크 링크 정상 동작
