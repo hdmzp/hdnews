@@ -2,7 +2,7 @@
 """hdnews 수집기.
 
 네이버 뉴스 검색 API + 구글뉴스 RSS에서 기사를 수집해
-data/articles.json(7일 롤링), data/trending.json, data/briefing.json을 갱신한다.
+data/articles.json(7일 롤링), data/trending.json, data/briefing.json, data/issues.json(72시간 이슈 묶음)을 갱신한다.
 표준 라이브러리만 사용한다.
 
 사용법:
@@ -526,6 +526,153 @@ def compute_briefing(articles, trending, config, now):
     }
 
 
+# ---------------------------------------------------------------- 이슈 타임라인
+# 같은 사건을 다룬 서로 다른 기사(후속·해설·타사 보도)를 하나의 '이슈'로 묶는다.
+# 전재(같은 제목)는 이미 merge_articles에서 대표 기사의 heat로 합쳐져 있으므로
+# 여기서는 제목 토큰 유사도로 '다른 제목의 같은 사건'을 묶는다.
+
+ISSUE_WINDOW_HOURS = 72
+ISSUE_MIN_ARTICLES = 2    # 서로 다른 기사 최소 수 — 전재만 많은 1건짜리는 이슈가 아님
+ISSUE_MIN_REPORTS = 3     # 전재 포함 보도 건수(heat 합) 최소
+ISSUE_JACCARD = 0.4       # 제목 토큰 자카드 유사도 하한
+ISSUE_MIN_SHARED = 2      # 공유 토큰 최소 수
+ISSUE_MAX_DF = 150        # 이보다 많은 기사에 나오는 토큰(쿠팡·AI·할인…)은 후보 쌍 생성에 쓰지 않음
+ISSUE_MAX_COUNT = 600     # issues.json 상한 (보도량 순으로 자름)
+LEADING_TAG_RE = re.compile(r"^(\s*[\[【][^\]】]{0,20}[\]】]\s*)+")
+TRAILING_NOTE_RE = re.compile(r"\s*[\(（](종합|상보|속보|1보|2보|3보|전문)[\)）]\s*$")
+
+
+def issue_title(title):
+    """이슈 제목용 정리: 앞의 [유통소식] 류 태그와 뒤의 (종합) 류 표기를 뗀다."""
+    t = LEADING_TAG_RE.sub("", title)
+    t = TRAILING_NOTE_RE.sub("", t)
+    return t.strip() or title.strip()
+
+
+def cluster_articles(pool, stopwords):
+    """제목 토큰 유사도로 기사를 묶는다 (공유 토큰 ≥ ISSUE_MIN_SHARED, 자카드 ≥ ISSUE_JACCARD).
+
+    단일 연결(union-find): A~B, B~C면 A·B·C가 한 묶음. 반환: 기사 리스트의 리스트.
+    """
+    vocab = Counter()
+    for a in pool:
+        vocab.update(raw_tokens(a["title"]))
+    terms = {a["id"]: set(extract_tokens(a["title"], stopwords, vocab)) for a in pool}
+    index = {}
+    for a in pool:
+        for t in terms[a["id"]]:
+            index.setdefault(t, []).append(a["id"])
+    parent = {a["id"]: a["id"] for a in pool}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    checked = set()
+    for ids in index.values():
+        if len(ids) > ISSUE_MAX_DF:
+            continue
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                pair = (ids[i], ids[j])
+                if pair in checked:
+                    continue
+                checked.add(pair)
+                tx, ty = terms[pair[0]], terms[pair[1]]
+                shared = len(tx & ty)
+                if shared < ISSUE_MIN_SHARED or shared / len(tx | ty) < ISSUE_JACCARD:
+                    continue
+                rx, ry = find(pair[0]), find(pair[1])
+                if rx != ry:
+                    parent[ry] = rx
+    groups = {}
+    for a in pool:
+        groups.setdefault(find(a["id"]), []).append(a)
+    return list(groups.values())
+
+
+def inherit_issue_ids(issues, prev_issues):
+    """이전 issues.json의 id를 기사 겹침이 가장 큰 새 이슈가 물려받는다 (팔로우 유지용).
+
+    한 이슈로 합쳐진 나머지 이전 id는 prevIds에 남겨 프런트가 팔로우를 옮길 수 있게 한다.
+    승계받지 못한 이슈의 자연 id(is-<첫 기사 id>)가 승계된 id와 겹치면 기사 목록 해시 id로 바꾼다.
+    """
+    assigned, merged, taken = {}, {}, set()
+    if prev_issues:
+        owner = {}  # 기사 id → 이전 이슈 id
+        for p in prev_issues:
+            for aid in p.get("articleIds", []):
+                owner.setdefault(aid, p["id"])
+        cands = []
+        for idx, iss in enumerate(issues):
+            overlap = Counter(owner[aid] for aid in iss["articleIds"] if aid in owner)
+            cands.extend((n, pid, idx) for pid, n in overlap.items())
+        cands.sort(key=lambda c: (-c[0], c[1], c[2]))
+        for n, pid, idx in cands:
+            if pid in taken:
+                continue
+            taken.add(pid)
+            if idx in assigned:
+                merged.setdefault(idx, []).append(pid)
+            else:
+                assigned[idx] = pid
+    for idx, pid in assigned.items():
+        issues[idx]["id"] = pid
+    for idx, pids in merged.items():
+        issues[idx]["prevIds"] = pids
+    seen = set(assigned.values())
+    for idx, iss in enumerate(issues):
+        if idx in assigned:
+            continue
+        if iss["id"] in seen:
+            iss["id"] = "is-" + hashlib.sha1(",".join(iss["articleIds"]).encode("utf-8")).hexdigest()[:12]
+        seen.add(iss["id"])
+    return issues
+
+
+def build_issues(articles, prev_issues, stopwords, now):
+    """최근 72시간 기사에서 이슈 목록을 만든다 (뉴닉 '이슈 타임라인' 방식).
+
+    이슈 = 서로 다른 기사 ISSUE_MIN_ARTICLES건 이상 + 전재 포함 보도 ISSUE_MIN_REPORTS건 이상인 묶음.
+    노이즈 기사는 제외. 결과는 마지막 기사 시각 내림차순.
+    """
+    cutoff = now - timedelta(hours=ISSUE_WINDOW_HOURS)
+    pool = [a for a in articles
+            if a.get("pubDate") and not a.get("noise")
+            and datetime.fromisoformat(a["pubDate"]) >= cutoff]
+    issues = []
+    for members in cluster_articles(pool, stopwords):
+        reports = sum(a.get("heat", 1) for a in members)
+        if len(members) < ISSUE_MIN_ARTICLES or reports < ISSUE_MIN_REPORTS:
+            continue
+        members.sort(key=lambda a: (a["pubDate"], a["id"]))
+        rep = max(members, key=lambda a: (a.get("heat", 1) + a.get("riskScore", 0), a["pubDate"]))
+        issues.append({
+            "id": "is-" + members[0]["id"],
+            "title": issue_title(rep["title"]),
+            "summary": rep.get("description", ""),
+            "repArticleId": rep["id"],
+            "articleIds": [a["id"] for a in members],
+            "articles": len(members),
+            "count": reports,
+            "firstAt": members[0]["pubDate"],
+            "lastAt": members[-1]["pubDate"],
+            "companies": sorted({c for a in members for c in (a.get("mainCompanies") or [])}),
+            "tabs": sorted({t for a in members for t in a.get("tabs", [])}),
+            "riskMax": max(a.get("riskScore", 0) for a in members),
+            "riskCategories": sorted({c for a in members for c in a.get("riskCategories", [])}),
+        })
+    issues.sort(key=lambda i: (-i["count"], i["lastAt"]))   # 상한은 보도량 기준으로 자른다
+    issues = issues[:ISSUE_MAX_COUNT]
+    inherit_issue_ids(issues, prev_issues)
+    issues.sort(key=lambda i: i["lastAt"], reverse=True)
+    return {"generatedAt": now.isoformat(), "windowHours": ISSUE_WINDOW_HOURS,
+            "minArticles": ISSUE_MIN_ARTICLES, "minReports": ISSUE_MIN_REPORTS,
+            "issues": issues}
+
+
 # ---------------------------------------------------------------- 파이프라인
 
 def build_queries(config):
@@ -687,6 +834,16 @@ def run():
     write_json(os.path.join(DATA_DIR, "trending.json"), trending)
     write_json(os.path.join(DATA_DIR, "briefing.json"), briefing)
 
+    # 이슈 타임라인(72시간 같은 사건 묶음) — 실패해도 기존 issues.json은 유지
+    try:
+        issues_path = os.path.join(DATA_DIR, "issues.json")
+        prev_issues = load_json(issues_path, {"issues": []}).get("issues", [])
+        issues = build_issues(merged, prev_issues, stopwords, now)
+        write_json(issues_path, issues)
+        print(f"issues: {len(issues['issues'])}건")
+    except Exception as e:  # noqa: BLE001 — 부가 기능이라 어떤 오류든 격리
+        print(f"issues 생성 실패 (기존 파일 유지): {e}", file=sys.stderr)
+
     # 회사 대시보드(hdhs 편성·랭킹 연동) — 실패해도 뉴스 수집 결과에는 영향 없음
     try:
         import hsdash
@@ -841,6 +998,52 @@ def selftest():
     br = compute_briefing(arts, tr, config, now)
     # 자정 직후에는 '오늘' 집계가 0일 수 있으므로 주간 집계로 검증
     assert br["weekly"]["total"] >= 1 and "topTrending" in br["daily"]
+
+    # ---- 이슈 타임라인: 같은 사건을 다룬 서로 다른 기사들을 하나의 이슈로 묶는다
+    def mk(i, title, hours, heat=1, risk=0, mains=None, tabs=None, noise=False):
+        return {"id": f"a{i}", "title": title, "description": f"요약 {i}",
+                "pubDate": iso(now - timedelta(hours=hours)), "heat": heat, "riskScore": risk,
+                "mainCompanies": mains or [], "companies": mains or [], "tabs": tabs or ["retail"],
+                "riskCategories": ["legal"] if risk else [], "noise": noise}
+    pool = [
+        mk(1, "컬리, 아모레퍼시픽과 손잡고 단독 상품 만든다", 5),
+        mk(2, "컬리·아모레퍼시픽 맞손…단독 상품 공동 개발", 4, heat=3),
+        mk(3, "컬리, 아모레퍼시픽과 단독 상품·공동 마케팅 업무협약", 2),
+        mk(4, "롯데마트 절임배추 사전예약 접수", 3),
+        mk(5, "롯데마트, 절임배추 사전예약 접수 시작", 1),                    # 2건·보도 2건 → 제외
+        mk(6, "홈플러스 점포 매각 논란 확산", 1, heat=5, risk=3, tabs=["retail", "risk"]),  # 기사 1건 → 제외
+        mk(7, "컬리 아모레퍼시픽 단독 상품 노이즈", 1, noise=True),           # 노이즈 → 제외
+        mk(8, "GS샵 송출수수료 협상 결렬 위기", 1, risk=2, mains=["gsshop"], tabs=["retail", "homeshopping", "risk"]),
+        mk(9, "GS샵, 송출수수료 협상 결렬…방송 중단 우려", 0.5, heat=2, risk=2, mains=["gsshop"], tabs=["retail", "homeshopping", "risk"]),
+    ]
+    out = build_issues(pool, [], set(), now)
+    issues = out["issues"]
+    assert sorted(i["articles"] for i in issues) == [2, 3], [i["title"] for i in issues]
+    assert issues[0]["lastAt"] >= issues[1]["lastAt"]          # 최근 기사 순
+    kurly = next(i for i in issues if "컬리" in i["title"])
+    assert kurly["count"] == 5 and kurly["articleIds"] == ["a1", "a2", "a3"], kurly
+    assert kurly["repArticleId"] == "a2" and kurly["summary"] == "요약 2", kurly   # 보도량 최다 기사가 대표
+    assert kurly["firstAt"] == pool[0]["pubDate"] and kurly["lastAt"] == pool[2]["pubDate"]
+    gs = next(i for i in issues if "GS샵" in i["title"])
+    assert gs["companies"] == ["gsshop"] and gs["riskMax"] == 2 and gs["riskCategories"] == ["legal"], gs
+    assert "homeshopping" in gs["tabs"] and "risk" in gs["tabs"], gs
+    # id 승계: 첫 기사가 72시간 밖으로 밀려나고 새 기사가 붙어도 같은 id, 기사 수·lastAt 갱신
+    prev = issues
+    pool.append(mk(10, "컬리 아모레퍼시픽 단독 상품 첫 공개", 0.25))
+    pool[0]["pubDate"] = iso(now - timedelta(hours=80))
+    out2 = build_issues(pool, prev, set(), now)
+    kurly2 = next(i for i in out2["issues"] if "컬리" in i["title"])
+    assert kurly2["id"] == kurly["id"], (kurly2["id"], kurly["id"])
+    assert kurly2["articleIds"] == ["a2", "a3", "a10"] and kurly2["lastAt"] == pool[-1]["pubDate"], kurly2
+    assert issue_title("[유통소식]컬리, 아모레퍼시픽과 업무협약 체결(종합)") == "컬리, 아모레퍼시픽과 업무협약 체결"
+    # 이슈가 둘로 갈라지면 겹침이 큰 쪽이 id를 물려받고, 다른 쪽의 자연 id가 겹치면 바뀐다
+    split = [{"id": "is-a1", "articleIds": ["a1", "a4"]}, {"id": "is-a2", "articleIds": ["a2", "a3", "a5"]}]
+    inherit_issue_ids(split, [{"id": "is-a1", "articleIds": ["a1", "a2", "a3"]}])
+    assert split[1]["id"] == "is-a1" and split[0]["id"] != "is-a1" and split[0]["id"].startswith("is-"), split
+    # 두 이슈가 하나로 합쳐지면 큰 쪽 id를 쓰고 나머지는 prevIds로 남긴다
+    joined = [{"id": "is-b1", "articleIds": ["b1", "b2", "c1"]}]
+    inherit_issue_ids(joined, [{"id": "is-b1", "articleIds": ["b1", "b2"]}, {"id": "is-c1", "articleIds": ["c1"]}])
+    assert joined[0]["id"] == "is-b1" and joined[0]["prevIds"] == ["is-c1"], joined
 
     import hsdash
     hsdash.selftest()
