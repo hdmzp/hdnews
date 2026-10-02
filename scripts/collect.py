@@ -296,12 +296,35 @@ def from_excluded_domain(art, domains):
     return False
 
 
+TITLE_TAG_RE = re.compile(r"^\s*[\[【〈<]([^\]】〉>]{1,24})[\]】〉>]")
+
+
+def title_tag(title):
+    """제목 맨 앞의 [산업소식]·[인사] 같은 태그 문자열 (없으면 빈 문자열)."""
+    m = TITLE_TAG_RE.match(title)
+    return m.group(1).strip() if m else ""
+
+
+def _has_any(keywords, text):
+    return any(kw in text for kw in keywords)
+
+
 def tag_article(art, config):
     """companies / mainCompanies / rcompanies / tabs / 유형 / riskScore / noise 필드를 채운다.
 
     companies는 본문 언급까지 포함한 전체 매칭, mainCompanies는 제목에 회사명이
     나온 '주체' 기사만. 요약문 한 줄 언급(브리핑 모음·타사 기사 속 사례)으로
     회사 기사로 잡히는 오탐을 주체/언급으로 구분하기 위함.
+
+    정제 규칙(노이즈 판정 → 랭킹·홈쇼핑 태그·피드·트렌딩·이슈에서 제외, 검색으로는 조회 가능):
+      ① 연예·스포츠 섹션/매체 도메인 기사
+      ② 연예 키워드 기사 — 제목에 있으면 홈쇼핑 관련이 아닌 한 노이즈, 요약에만 있어도
+         제목에 유통 맥락이 없고 홈쇼핑사 언급도 없으면 노이즈
+      ③ 어떤 회사·유통 키워드·유통 유형에도 매칭되지 않는 기사 (리스크 키워드만으로는 통과 못 함)
+      ④ [인사]·[동정]·[부고] 같은 모음 — 제목에 홈쇼핑사·유통기업 이름이 없으면 노이즈
+      ⑤ [산업소식]·[2026 국감]·[포토] 같은 모음·연재 태그 — 제목에 회사·유통 키워드가 없고 홈쇼핑사 언급도 없으면 노이즈
+    리스크 분류는 제목에 유통 맥락이 있거나 홈쇼핑사가 언급된 기사에만 적용한다
+    (연예·정치 기사의 '논란'이 리스크로 잡히는 오탐 방지).
     """
     title = art["title"]
     text = title + " " + art.get("description", "")
@@ -309,43 +332,58 @@ def tag_article(art, config):
                  if any(alias in text for alias in c["aliases"])]
     main_companies = [c["id"] for c in config["companies"]
                       if c["id"] in companies and any(alias in title for alias in c["aliases"])]
-    rcompanies = [c["id"] for c in config.get("retailCompanies", [])
-                  if any(alias in text for alias in c["aliases"])]
+    retail_cos = config.get("retailCompanies", [])
+    rcompanies = [c["id"] for c in retail_cos if any(alias in text for alias in c["aliases"])]
+    rcompanies_title = [c["id"] for c in retail_cos if any(alias in title for alias in c["aliases"])]
+    tab_rules = config["tabRules"]
+    all_tab_kw = [kw for rule in tab_rules.values() for kw in rule["keywords"]]
+    # 유통 맥락: 제목에 회사·유통 키워드가 있으면 '강함', 요약에만 있으면 '약함'
+    strong = bool(main_companies or rcompanies_title or _has_any(all_tab_kw, title))
+    general_cats = [cat["id"] for cat in config.get("generalCategories", [])
+                    if _has_any(cat["keywords"], text)]
+    # 관련성: 회사·유통 키워드가 어디든 있거나 유통 유형(프로모션·출시…)에 해당. 리스크 키워드만으로는 통과 못 함
+    weak = bool(companies or rcompanies or general_cats or _has_any(all_tab_kw, text))
     # 홈쇼핑 관련: 회사명 매칭 또는 홈쇼핑 키워드가 '제목'에 등장
-    hs_kw = config["tabRules"].get("homeshopping", {}).get("keywords", [])
-    hs_related = bool(companies) or any(kw in art["title"] for kw in hs_kw)
+    hs_kw = tab_rules.get("homeshopping", {}).get("keywords", [])
+    hs_related = bool(companies) or _has_any(hs_kw, title)
     tabs = ["retail"]
-    for tab, rule in config["tabRules"].items():
+    for tab, rule in tab_rules.items():
         if tab in ("retail", "homeshopping"):
             continue
-        if any(kw in text for kw in rule["keywords"]):
+        if _has_any(rule["keywords"], text):
             tabs.append(tab)
     if hs_related:
         tabs.append("homeshopping")
     risk_cats, score = [], 0
-    for cat in config["riskCategories"]:
-        if any(kw in text for kw in cat["keywords"]):
-            risk_cats.append(cat["id"])
-            score += cat["weight"]
+    if strong or companies:
+        for cat in config["riskCategories"]:
+            if _has_any(cat["keywords"], text):
+                risk_cats.append(cat["id"])
+                score += cat["weight"]
     score = min(score, RISK_SCORE_CAP)
     if score >= 1:
         tabs.append("risk")
-    general_cats = [cat["id"] for cat in config.get("generalCategories", [])
-                    if any(kw in text for kw in cat["keywords"])]
-    # 노이즈 판정 (랭킹·홈쇼핑 태그·피드·트렌딩에서 제외, 검색으로는 조회 가능)
-    # ① 연예·스포츠 섹션/매체 기사는 무조건 노이즈 (홈쇼핑 언급이 있어도 연예 홍보성)
-    # ② 연예 키워드 기사: 홈쇼핑 관련이면 예외적으로 유지
-    # ③ 어떤 회사·유통 키워드·유형에도 매칭되지 않으면 관련성 없음 → 노이즈
-    retail_kw = config["tabRules"].get("retail", {}).get("keywords", [])
-    relevant = (companies or rcompanies or risk_cats or general_cats
-                or len(tabs) > 1
-                or any(kw in text for kw in retail_kw))
+    exclude_kw = config.get("excludeKeywords", [])
+    ent_title = _has_any(exclude_kw, title)
+    ent_text = _has_any(exclude_kw, text)
+    tag = title_tag(title)
+    tag_key = tag.replace(" ", "").lower()
+    noise_tags = {t.replace(" ", "").lower() for t in config.get("noiseTags", [])}
+    head = LEADING_TAG_RE.sub("", title).strip()
+    personnel = ((tag_key in noise_tags)
+                 or any(title.lstrip().startswith(pfx) or head.startswith(pfx)
+                        for pfx in config.get("noiseTitlePrefixes", [])))
+    roundup = bool(tag) and any(t.replace(" ", "").lower() in tag_key for t in config.get("roundupTags", []))
+    # 홈쇼핑사가 언급된 기사는 요약의 연예 키워드나 모음 태그만으로 버리지 않는다 (계열사 광고 모델 발탁 등)
     noise = (from_excluded_domain(art, config.get("excludeDomains", []))
-             or (not hs_related
-                 and any(kw in art["title"] for kw in config.get("excludeKeywords", [])))
-             or not relevant)
-    if noise and "homeshopping" in tabs:
-        tabs.remove("homeshopping")
+             or (not hs_related and ent_title)
+             or (not strong and not companies and ent_text)
+             or not weak
+             or (personnel and not (main_companies or rcompanies_title))
+             or (roundup and not strong and not companies))
+    if noise:
+        tabs = [t for t in tabs if t not in ("homeshopping", "risk")]
+        risk_cats, score = [], 0
     art.update(companies=companies, mainCompanies=main_companies,
                rcompanies=rcompanies, tabs=tabs,
                riskCategories=risk_cats, categories=general_cats,
@@ -905,6 +943,49 @@ def selftest():
     offtopic = {"title": "'체지방 9.2%' 박진영, 파격 의상 공개", "description": "유지비 20억 구내식당"}
     tag_article(offtopic, config)
     assert offtopic["noise"] is True, offtopic
+    # ---- 정제: 연예 기사의 '논란'은 유통 맥락(제목의 회사·유통 키워드 또는 홈쇼핑사 언급)이 없으면 리스크가 아님
+    star = {"title": "이민호, 부산국제영화제 단독 토크 취소…'암살자(들)' 논란 속 배경에...",
+            "description": "올해 이민호는 신세계백화점 센텀시티점 문화홀에서 약 한 시간 동안 관객들과 만날 예정이었다."}
+    tag_article(star, config)
+    assert star["noise"] is True and star["riskCategories"] == [] and "risk" not in star["tabs"], star
+    # 유통 키워드가 요약에만 있는 사회 기사: 피드에는 남지만 리스크로 분류하지 않음
+    weak = {"title": "“얘를 어떻게 처벌합니까”…2500원 과자로 법정 선 발달장애인", "description": "편의점에서 과자를 집은 뒤 논란이 됐다."}
+    tag_article(weak, config)
+    assert weak["noise"] is False and weak["riskCategories"] == [], weak
+    # ---- 정제: 인사·동정 모음은 홈쇼핑사 이름이 제목에 없으면 노이즈
+    hr = {"title": "[인사] 과학기술정보통신부 외", "description": "◇ 국장급 전보 ..."}
+    tag_article(hr, config)
+    assert hr["noise"] is True, hr
+    hr2 = {"title": "[인사] TBWA코리아 / 홈앤쇼핑 / 한국신용평가", "description": ""}
+    tag_article(hr2, config)
+    assert hr2["noise"] is False and hr2["mainCompanies"] == ["hns"], hr2
+    hr3 = {"title": "오늘의 인사-산업통상부, 행정안전부 외", "description": "유통 담당 과장 전보"}
+    tag_article(hr3, config)
+    assert hr3["noise"] is True, hr3
+    # ---- 정제: [산업소식]·[2026 국감] 같은 모음 기사는 제목에 회사·유통 키워드가 있어야 통과
+    ru = {"title": "[산업소식] 한화, 신규 사업 진출 선언", "description": "유통 계열사도 참여한다."}
+    tag_article(ru, config)
+    assert ru["noise"] is True, ru
+    ru2 = {"title": "[산업소식] 현대홈쇼핑, 추석 특집 방송 편성", "description": ""}
+    tag_article(ru2, config)
+    assert ru2["noise"] is False and ru2["mainCompanies"] == ["hyundai"], ru2
+    ga = {"title": "[2026 국감] 4년 만에 재계 총수 '줄소환'…잔혹사 재현되나", "description": "국정감사 증인 명단에 유통 대기업 총수도 올랐다."}
+    tag_article(ga, config)
+    assert ga["noise"] is True, ga
+    ga2 = {"title": "[2026 국감] 농축산물 할인지원 4267억…이마트 698억 ‘쏠림’ 논란", "description": ""}
+    tag_article(ga2, config)
+    assert ga2["noise"] is False and "expose" in ga2["riskCategories"], ga2
+
+    hr4 = {"title": "[인사] 정준호 전 롯데백화점 대표, 몽클레르코리아 수장으로", "description": ""}
+    tag_article(hr4, config)
+    assert hr4["noise"] is False, hr4          # 유통기업 인사는 유지
+    sale = {"title": "신세계百, 가을 정기세일 돌입…300여 브랜드 최대 60% 할인", "description": ""}
+    tag_article(sale, config)
+    assert sale["noise"] is False and "promo" in sale["categories"], sale   # 유통 유형(프로모션)으로 통과
+    ad = {"title": "아워홈, 배우 윤경호 모델 발탁…냉동 도시락 '온더고' 광고 공개", "description": "현대홈쇼핑 계열 아워홈은 신규 캠페인을 공개했다."}
+    tag_article(ad, config)
+    assert ad["noise"] is False and ad["companies"] == ["hyundai"] and ad["riskCategories"] == [], ad  # 홈쇼핑사 언급은 유지
+
     # 유통기업 태깅
     rc = {"title": "다이소, 초저가 화장품 매출 급증", "description": ""}
     tag_article(rc, config)

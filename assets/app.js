@@ -170,8 +170,8 @@
       // 주제 페이지(#/topic/risk 등): 그 태그가 붙은 기사, 노이즈 제외
       arts = state.articles.filter((a) => !a.noise && a.tabs && a.tabs.includes(state.routeParam));
     } else if (state.view === "risk") {
-      // 리스크 유형 페이지(#/risk/legal 등)
-      arts = state.articles.filter((a) => (a.riskCategories || []).includes(state.routeParam));
+      // 리스크 유형 페이지(#/risk/legal 등): 노이즈(연예·모음 기사) 제외
+      arts = state.articles.filter((a) => !a.noise && (a.riskCategories || []).includes(state.routeParam));
     } else {
       // 유통 피드: 노이즈(연예 등) 제외 — 검색 시에는 전체에서 찾기
       arts = state.query ? state.articles : state.articles.filter((a) => !a.noise);

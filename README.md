@@ -55,6 +55,7 @@
   - `topicQueries` — 탭별 수집 검색어
   - `riskCategories[].keywords` — 리스크 감지 키워드 (weight가 심각도)
   - `config/stopwords.json` — 급상승 키워드에서 제외할 단어
+- **노이즈 정제**(연예·모음 기사 제외)는 `config/keywords.json`의 `excludeKeywords`(연예 키워드), `noiseTags`·`noiseTitlePrefixes`([인사]·[동정]·[부고]·운세 — 제목에 홈쇼핑사·유통기업 이름이 없으면 제외), `roundupTags`([산업소식]·[국감]·[포토]·[르포] 같은 모음·연재 태그 — 제목에 회사·유통 키워드가 없고 홈쇼핑사 언급도 없으면 제외)로 조정합니다. 리스크 분류는 제목에 유통 맥락이 있거나 홈쇼핑사가 언급된 기사에만 적용되고, 리스크 키워드(논란 등)만으로는 기사가 통과하지 못합니다. 규칙은 매 수집마다 기존 기사에도 다시 적용됩니다
 - **홈 바로가기는 `config/shortcuts.json`** — 아이콘·라벨·이동 대상(`target.type`: `trending` / `hot` / `topic`(탭 id) / `risk`(리스크 카테고리 id) / `query`(검색어) / `tab` / `company`). 새로고침하면 바로 반영
 - 이슈 묶음 기준(72시간·최소 기사 수·유사도)은 `scripts/collect.py`의 `ISSUE_*` 상수. 팔로우·열람 기록·내 회사는 브라우저 localStorage(`hdnews.follows`, `hdnews.issueSeen`, `hdnews.shortcutSeen`, `hdnews.myCompany`)
 - 네이버 API 사용량: 쿼리 약 34개 × 48회/일 ≈ 1,600콜/일 (일 한도 25,000의 6%)

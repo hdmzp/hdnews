@@ -1,95 +1,904 @@
 {
   "companies": [
-    { "id": "hyundai", "name": "현대홈쇼핑", "short": "HD", "hsCode": "HD", "color": "#003C82", "group": "main", "type": "TV홈쇼핑", "aliases": ["현대홈쇼핑"] },
-    { "id": "gsshop", "name": "GS샵", "short": "GS", "hsCode": "GS", "color": "#1AA663", "group": "main", "type": "TV홈쇼핑", "aliases": ["GS샵", "GS홈쇼핑", "지에스샵"] },
-    { "id": "cj", "name": "CJ온스타일", "short": "CJ", "hsCode": "CJ", "color": "#4B286D", "group": "main", "type": "TV홈쇼핑", "aliases": ["CJ온스타일", "CJ오쇼핑"] },
-    { "id": "lotte", "name": "롯데홈쇼핑", "short": "LT", "hsCode": "LT", "color": "#DA291C", "group": "main", "type": "TV홈쇼핑", "aliases": ["롯데홈쇼핑", "롯데홈"] },
-    { "id": "gongyoung", "name": "공영쇼핑", "short": "공영", "hsCode": "PUBLIC", "color": "#0E7C7B", "group": "etc", "type": "TV홈쇼핑", "aliases": ["공영쇼핑", "공영홈쇼핑"] },
-    { "id": "hns", "name": "홈앤쇼핑", "short": "홈앤", "hsCode": "HNS", "color": "#E8590C", "group": "etc", "type": "TV홈쇼핑", "aliases": ["홈앤쇼핑"] },
-    { "id": "ktalpha", "name": "KT알파쇼핑", "short": "KT", "hsCode": "KTALPHA", "color": "#5C3D99", "group": "etc", "type": "T커머스", "aliases": ["KT알파쇼핑", "KT알파 쇼핑"] },
-    { "id": "ssglive", "name": "신세계라이브쇼핑", "short": "SSG", "hsCode": "SHINSEGAE", "color": "#C8102E", "group": "etc", "type": "T커머스", "aliases": ["신세계라이브쇼핑"] },
-    { "id": "ns", "name": "NS홈쇼핑", "short": "NS", "hsCode": "NS", "color": "#1F6FEB", "group": "etc", "type": "TV홈쇼핑", "aliases": ["NS홈쇼핑", "엔에스홈쇼핑"] },
-    { "id": "shoppingnt", "name": "쇼핑엔티", "short": "NT", "hsCode": "SHOPPINGNT", "color": "#B8860B", "group": "etc", "type": "T커머스", "aliases": ["쇼핑엔티"] },
-    { "id": "skstoa", "name": "SK스토아", "short": "SK", "hsCode": "SKSTOA", "color": "#2E8B57", "group": "etc", "type": "T커머스", "aliases": ["SK스토아"] },
-    { "id": "wshop", "name": "W쇼핑", "short": "W", "hsCode": null, "color": "#6B7280", "group": "etc", "type": "T커머스", "aliases": ["W쇼핑", "더블유쇼핑"] }
+    {
+      "id": "hyundai",
+      "name": "현대홈쇼핑",
+      "short": "HD",
+      "hsCode": "HD",
+      "color": "#003C82",
+      "group": "main",
+      "type": "TV홈쇼핑",
+      "aliases": [
+        "현대홈쇼핑"
+      ]
+    },
+    {
+      "id": "gsshop",
+      "name": "GS샵",
+      "short": "GS",
+      "hsCode": "GS",
+      "color": "#1AA663",
+      "group": "main",
+      "type": "TV홈쇼핑",
+      "aliases": [
+        "GS샵",
+        "GS홈쇼핑",
+        "지에스샵"
+      ]
+    },
+    {
+      "id": "cj",
+      "name": "CJ온스타일",
+      "short": "CJ",
+      "hsCode": "CJ",
+      "color": "#4B286D",
+      "group": "main",
+      "type": "TV홈쇼핑",
+      "aliases": [
+        "CJ온스타일",
+        "CJ오쇼핑"
+      ]
+    },
+    {
+      "id": "lotte",
+      "name": "롯데홈쇼핑",
+      "short": "LT",
+      "hsCode": "LT",
+      "color": "#DA291C",
+      "group": "main",
+      "type": "TV홈쇼핑",
+      "aliases": [
+        "롯데홈쇼핑",
+        "롯데홈"
+      ]
+    },
+    {
+      "id": "gongyoung",
+      "name": "공영쇼핑",
+      "short": "공영",
+      "hsCode": "PUBLIC",
+      "color": "#0E7C7B",
+      "group": "etc",
+      "type": "TV홈쇼핑",
+      "aliases": [
+        "공영쇼핑",
+        "공영홈쇼핑"
+      ]
+    },
+    {
+      "id": "hns",
+      "name": "홈앤쇼핑",
+      "short": "홈앤",
+      "hsCode": "HNS",
+      "color": "#E8590C",
+      "group": "etc",
+      "type": "TV홈쇼핑",
+      "aliases": [
+        "홈앤쇼핑"
+      ]
+    },
+    {
+      "id": "ktalpha",
+      "name": "KT알파쇼핑",
+      "short": "KT",
+      "hsCode": "KTALPHA",
+      "color": "#5C3D99",
+      "group": "etc",
+      "type": "T커머스",
+      "aliases": [
+        "KT알파쇼핑",
+        "KT알파 쇼핑"
+      ]
+    },
+    {
+      "id": "ssglive",
+      "name": "신세계라이브쇼핑",
+      "short": "SSG",
+      "hsCode": "SHINSEGAE",
+      "color": "#C8102E",
+      "group": "etc",
+      "type": "T커머스",
+      "aliases": [
+        "신세계라이브쇼핑"
+      ]
+    },
+    {
+      "id": "ns",
+      "name": "NS홈쇼핑",
+      "short": "NS",
+      "hsCode": "NS",
+      "color": "#1F6FEB",
+      "group": "etc",
+      "type": "TV홈쇼핑",
+      "aliases": [
+        "NS홈쇼핑",
+        "엔에스홈쇼핑"
+      ]
+    },
+    {
+      "id": "shoppingnt",
+      "name": "쇼핑엔티",
+      "short": "NT",
+      "hsCode": "SHOPPINGNT",
+      "color": "#B8860B",
+      "group": "etc",
+      "type": "T커머스",
+      "aliases": [
+        "쇼핑엔티"
+      ]
+    },
+    {
+      "id": "skstoa",
+      "name": "SK스토아",
+      "short": "SK",
+      "hsCode": "SKSTOA",
+      "color": "#2E8B57",
+      "group": "etc",
+      "type": "T커머스",
+      "aliases": [
+        "SK스토아"
+      ]
+    },
+    {
+      "id": "wshop",
+      "name": "W쇼핑",
+      "short": "W",
+      "hsCode": null,
+      "color": "#6B7280",
+      "group": "etc",
+      "type": "T커머스",
+      "aliases": [
+        "W쇼핑",
+        "더블유쇼핑"
+      ]
+    }
   ],
   "retailCompanies": [
-    { "id": "lotteshopping", "name": "롯데쇼핑", "aliases": ["롯데쇼핑", "롯데마트", "롯데백화점"] },
-    { "id": "shinsegae", "name": "신세계", "aliases": ["신세계백화점", "신세계그룹", "이마트"] },
-    { "id": "hyundaidept", "name": "현대백화점", "aliases": ["현대백화점"] },
-    { "id": "homeplus", "name": "홈플러스", "aliases": ["홈플러스"] },
-    { "id": "gsretail", "name": "GS리테일", "aliases": ["GS리테일", "GS25"] },
-    { "id": "bgf", "name": "BGF리테일", "aliases": ["BGF리테일", "CU 편의점"] },
-    { "id": "costco", "name": "코스트코", "aliases": ["코스트코"] },
-    { "id": "daiso", "name": "다이소", "aliases": ["다이소"] },
-    { "id": "oliveyoung", "name": "올리브영", "aliases": ["올리브영"] },
-    { "id": "musinsa", "name": "무신사", "aliases": ["무신사"] },
-    { "id": "coupang", "name": "쿠팡", "aliases": ["쿠팡"] },
-    { "id": "aliexpress", "name": "알리·테무", "aliases": ["알리익스프레스", "테무"] },
-    { "id": "st11", "name": "11번가", "aliases": ["11번가"] },
-    { "id": "gmarket", "name": "G마켓", "aliases": ["G마켓", "지마켓"] },
-    { "id": "ssgcom", "name": "SSG닷컴", "aliases": ["SSG닷컴", "쓱닷컴"] },
-    { "id": "kurly", "name": "컬리", "aliases": ["컬리", "마켓컬리"] }
+    {
+      "id": "lotteshopping",
+      "name": "롯데쇼핑",
+      "aliases": [
+        "롯데쇼핑",
+        "롯데마트",
+        "롯데백화점"
+      ]
+    },
+    {
+      "id": "shinsegae",
+      "name": "신세계",
+      "aliases": [
+        "신세계백화점",
+        "신세계그룹",
+        "이마트"
+      ]
+    },
+    {
+      "id": "hyundaidept",
+      "name": "현대백화점",
+      "aliases": [
+        "현대백화점"
+      ]
+    },
+    {
+      "id": "homeplus",
+      "name": "홈플러스",
+      "aliases": [
+        "홈플러스"
+      ]
+    },
+    {
+      "id": "gsretail",
+      "name": "GS리테일",
+      "aliases": [
+        "GS리테일",
+        "GS25"
+      ]
+    },
+    {
+      "id": "bgf",
+      "name": "BGF리테일",
+      "aliases": [
+        "BGF리테일",
+        "CU 편의점"
+      ]
+    },
+    {
+      "id": "costco",
+      "name": "코스트코",
+      "aliases": [
+        "코스트코"
+      ]
+    },
+    {
+      "id": "daiso",
+      "name": "다이소",
+      "aliases": [
+        "다이소"
+      ]
+    },
+    {
+      "id": "oliveyoung",
+      "name": "올리브영",
+      "aliases": [
+        "올리브영"
+      ]
+    },
+    {
+      "id": "musinsa",
+      "name": "무신사",
+      "aliases": [
+        "무신사"
+      ]
+    },
+    {
+      "id": "coupang",
+      "name": "쿠팡",
+      "aliases": [
+        "쿠팡"
+      ]
+    },
+    {
+      "id": "aliexpress",
+      "name": "알리·테무",
+      "aliases": [
+        "알리익스프레스",
+        "테무"
+      ]
+    },
+    {
+      "id": "st11",
+      "name": "11번가",
+      "aliases": [
+        "11번가"
+      ]
+    },
+    {
+      "id": "gmarket",
+      "name": "G마켓",
+      "aliases": [
+        "G마켓",
+        "지마켓"
+      ]
+    },
+    {
+      "id": "ssgcom",
+      "name": "SSG닷컴",
+      "aliases": [
+        "SSG닷컴",
+        "쓱닷컴"
+      ]
+    },
+    {
+      "id": "kurly",
+      "name": "컬리",
+      "aliases": [
+        "컬리",
+        "마켓컬리"
+      ]
+    }
   ],
   "topicQueries": {
-    "retail": ["유통업계", "유통산업", "백화점", "대형마트", "편의점", "면세점", "아울렛", "복합쇼핑몰", "롯데쇼핑", "신세계백화점", "현대백화점", "이마트", "롯데마트", "홈플러스", "GS리테일", "BGF리테일", "코스트코", "다이소", "올리브영", "무신사", "에이블리", "패션 유통", "뷰티 유통"],
-    "homeshopping": ["홈쇼핑", "T커머스", "데이터홈쇼핑"],
-    "policy": ["홈쇼핑 재승인", "송출수수료", "과기정통부 홈쇼핑", "방송통신위원회 홈쇼핑", "공정거래위원회 유통"],
-    "ecommerce": ["쿠팡", "네이버쇼핑", "알리익스프레스", "테무", "라이브커머스", "이커머스", "11번가", "G마켓", "SSG닷컴", "컬리"],
-    "risk": ["홈쇼핑 방송사고", "홈쇼핑 소송", "홈쇼핑 뒷광고", "사망여우"]
+    "retail": [
+      "유통업계",
+      "유통산업",
+      "백화점",
+      "대형마트",
+      "편의점",
+      "면세점",
+      "아울렛",
+      "복합쇼핑몰",
+      "롯데쇼핑",
+      "신세계백화점",
+      "현대백화점",
+      "이마트",
+      "롯데마트",
+      "홈플러스",
+      "GS리테일",
+      "BGF리테일",
+      "코스트코",
+      "다이소",
+      "올리브영",
+      "무신사",
+      "에이블리",
+      "패션 유통",
+      "뷰티 유통"
+    ],
+    "homeshopping": [
+      "홈쇼핑",
+      "T커머스",
+      "데이터홈쇼핑"
+    ],
+    "policy": [
+      "홈쇼핑 재승인",
+      "송출수수료",
+      "과기정통부 홈쇼핑",
+      "방송통신위원회 홈쇼핑",
+      "공정거래위원회 유통"
+    ],
+    "ecommerce": [
+      "쿠팡",
+      "네이버쇼핑",
+      "알리익스프레스",
+      "테무",
+      "라이브커머스",
+      "이커머스",
+      "11번가",
+      "G마켓",
+      "SSG닷컴",
+      "컬리"
+    ],
+    "risk": [
+      "홈쇼핑 방송사고",
+      "홈쇼핑 소송",
+      "홈쇼핑 뒷광고",
+      "사망여우"
+    ]
   },
   "tabRules": {
-    "retail": { "keywords": ["유통", "백화점", "대형마트", "이마트", "편의점", "면세점", "리테일"] },
-    "homeshopping": { "keywords": ["홈쇼핑", "T커머스", "데이터홈쇼핑", "라이브방송"] },
-    "policy": { "keywords": ["재승인", "재허가", "송출수수료", "과기정통부", "과학기술정보통신부", "방통위", "방송통신위원회", "방미통위", "방송미디어통신위원회", "공정위", "공정거래위원회", "방송법", "전자상거래법", "규제", "국정감사"] },
-    "ecommerce": { "keywords": ["쿠팡", "네이버쇼핑", "알리익스프레스", "알리바바", "테무", "11번가", "G마켓", "SSG닷컴", "컬리", "무신사", "에이블리", "라이브커머스", "이커머스", "오픈마켓", "그립", "카카오쇼핑라이브"] }
+    "retail": {
+      "keywords": [
+        "유통",
+        "백화점",
+        "대형마트",
+        "이마트",
+        "편의점",
+        "면세점",
+        "리테일"
+      ]
+    },
+    "homeshopping": {
+      "keywords": [
+        "홈쇼핑",
+        "T커머스",
+        "데이터홈쇼핑",
+        "라이브방송"
+      ]
+    },
+    "policy": {
+      "keywords": [
+        "재승인",
+        "재허가",
+        "송출수수료",
+        "과기정통부",
+        "과학기술정보통신부",
+        "방통위",
+        "방송통신위원회",
+        "방미통위",
+        "방송미디어통신위원회",
+        "공정위",
+        "공정거래위원회",
+        "방송법",
+        "전자상거래법",
+        "규제",
+        "국정감사"
+      ]
+    },
+    "ecommerce": {
+      "keywords": [
+        "쿠팡",
+        "네이버쇼핑",
+        "알리익스프레스",
+        "알리바바",
+        "테무",
+        "11번가",
+        "G마켓",
+        "SSG닷컴",
+        "컬리",
+        "무신사",
+        "에이블리",
+        "라이브커머스",
+        "이커머스",
+        "오픈마켓",
+        "그립",
+        "카카오쇼핑라이브"
+      ]
+    }
   },
   "excludeDomains": [
-    "entertain.naver.com", "sports.naver.com", "enews.imbc.com",
-    "newsen.com", "osen.mt.co.kr", "mydaily.co.kr", "tvreport.co.kr",
-    "xportsnews.com", "tenasia.co.kr", "topstarnews.net", "starnewskorea.com",
-    "star.mt.co.kr", "sportsseoul.com", "sports.chosun.com", "sportsdonga.com",
-    "sports.khan.co.kr", "sports.hankooki.com", "tvdaily.co.kr", "joynews24.com",
-    "sportalkorea.com", "spotvnews.co.kr", "stardailynews.co.kr", "newsculture.press"
+    "entertain.naver.com",
+    "sports.naver.com",
+    "enews.imbc.com",
+    "newsen.com",
+    "osen.mt.co.kr",
+    "mydaily.co.kr",
+    "tvreport.co.kr",
+    "xportsnews.com",
+    "tenasia.co.kr",
+    "topstarnews.net",
+    "starnewskorea.com",
+    "star.mt.co.kr",
+    "sportsseoul.com",
+    "sports.chosun.com",
+    "sportsdonga.com",
+    "sports.khan.co.kr",
+    "sports.hankooki.com",
+    "tvdaily.co.kr",
+    "joynews24.com",
+    "sportalkorea.com",
+    "spotvnews.co.kr",
+    "stardailynews.co.kr",
+    "newsculture.press"
   ],
-  "excludeKeywords": ["드라마", "예능", "시청률", "열애", "결별", "컴백", "티저", "뮤직비디오", "콘서트", "팬미팅", "화보", "OST", "개봉", "관객수", "시사회", "종영", "살림남", "출연 확정", "캐스팅", "시상식", "어워즈", "여배우", "남배우", "배우 ", "앰배서더", "앰버서더", "전속모델", "전속 모델", "광고 모델", "모델 발탁", "뮤즈", "포토]", "포토+]", "영상]", "직캠", "직찍", "포토타임", "포토월", "앨범", "신곡", "아이돌", "걸그룹", "보이그룹", "뮤지컬", "무대인사", "팬사인회", "예고편", "본방사수", "단독샷", "레드카펫"],
+  "excludeKeywords": [
+    "드라마",
+    "예능",
+    "시청률",
+    "열애",
+    "결별",
+    "컴백",
+    "티저",
+    "뮤직비디오",
+    "콘서트",
+    "팬미팅",
+    "화보",
+    "OST",
+    "개봉",
+    "관객수",
+    "시사회",
+    "종영",
+    "살림남",
+    "출연 확정",
+    "캐스팅",
+    "시상식",
+    "어워즈",
+    "여배우",
+    "남배우",
+    "배우 ",
+    "앰배서더",
+    "앰버서더",
+    "전속모델",
+    "전속 모델",
+    "광고 모델",
+    "모델 발탁",
+    "뮤즈",
+    "포토]",
+    "포토+]",
+    "영상]",
+    "직캠",
+    "직찍",
+    "포토타임",
+    "포토월",
+    "앨범",
+    "신곡",
+    "아이돌",
+    "걸그룹",
+    "보이그룹",
+    "뮤지컬",
+    "무대인사",
+    "팬사인회",
+    "예고편",
+    "본방사수",
+    "단독샷",
+    "레드카펫",
+    "영화제",
+    "영화 '",
+    "영화 ‘",
+    "주연",
+    "출연작",
+    "팬들",
+    "가수 ",
+    "방송인",
+    "개그맨",
+    "관객",
+    "토크 콘서트"
+  ],
   "generalCategories": [
-    { "id": "promo", "name": "홍보·프로모션", "keywords": ["특가", "할인", "프로모션", "이벤트", "사은품", "쿠폰", "기획전", "역대급 혜택"] },
-    { "id": "launch", "name": "신상품·론칭", "keywords": ["출시", "론칭", "신상품", "신제품", "첫선", "선보인다", "선봬", "선보여", "런칭", "국내 첫", "국내 최초", "PB", "FW 컬렉션", "신규 브랜드", "단독 판매"] },
-    { "id": "marketing", "name": "마케팅·브랜딩", "keywords": ["마케팅", "캠페인", "브랜딩", "콜라보", "컬래버", "숏폼"] },
-    { "id": "broadcast_sales", "name": "방송·완판", "keywords": ["완판", "매진", "준비 수량", "주문 폭주", "론칭 방송", "첫 방송", "편성", "생방송", "특별 방송", "특별전", "누적 판매", "판매 돌파", "판매액", "주문액"] },
-    { "id": "performance", "name": "실적·재무", "keywords": ["실적", "영업이익", "영업손실", "매출", "분기", "흑자", "적자", "주가", "IPO", "배당", "상장", "거래정지", "합병", "인수", "지분"] },
-    { "id": "people", "name": "인사·조직", "keywords": ["인사", "대표이사", "신임", "선임", "임명", "조직개편", "채용"] },
-    { "id": "partnership", "name": "제휴·협력", "keywords": ["제휴", "협력", "업무협약", "MOU", "파트너십", "손잡"] },
-    { "id": "esg", "name": "ESG·사회공헌", "keywords": ["ESG", "기부", "후원", "사회공헌", "상생", "친환경", "장학", "봉사", "나눔"] },
-    { "id": "event", "name": "행사·지역", "keywords": ["페스타", "축제", "박람회", "개최", "팝업스토어", "팝업 스토어", "특산품", "지자체", "농가"] },
-    { "id": "content", "name": "콘텐츠·채널", "keywords": ["콘텐츠", "크리에이터", "유튜브", "모바일 라이브", "라이브커머스", "앱 개편", "리뉴얼", "채널 개편"] },
-    { "id": "industry", "name": "업계·시장", "keywords": ["홈쇼핑업계", "홈쇼핑 업계", "시장 규모", "거래액", "성장세", "역성장", "탈TV", "TV 시청", "송출수수료"] }
+    {
+      "id": "promo",
+      "name": "홍보·프로모션",
+      "keywords": [
+        "특가",
+        "할인",
+        "프로모션",
+        "이벤트",
+        "사은품",
+        "쿠폰",
+        "기획전",
+        "역대급 혜택"
+      ]
+    },
+    {
+      "id": "launch",
+      "name": "신상품·론칭",
+      "keywords": [
+        "출시",
+        "론칭",
+        "신상품",
+        "신제품",
+        "첫선",
+        "선보인다",
+        "선봬",
+        "선보여",
+        "런칭",
+        "국내 첫",
+        "국내 최초",
+        "PB",
+        "FW 컬렉션",
+        "신규 브랜드",
+        "단독 판매"
+      ]
+    },
+    {
+      "id": "marketing",
+      "name": "마케팅·브랜딩",
+      "keywords": [
+        "마케팅",
+        "캠페인",
+        "브랜딩",
+        "콜라보",
+        "컬래버",
+        "숏폼"
+      ]
+    },
+    {
+      "id": "broadcast_sales",
+      "name": "방송·완판",
+      "keywords": [
+        "완판",
+        "매진",
+        "준비 수량",
+        "주문 폭주",
+        "론칭 방송",
+        "첫 방송",
+        "편성",
+        "생방송",
+        "특별 방송",
+        "특별전",
+        "누적 판매",
+        "판매 돌파",
+        "판매액",
+        "주문액"
+      ]
+    },
+    {
+      "id": "performance",
+      "name": "실적·재무",
+      "keywords": [
+        "실적",
+        "영업이익",
+        "영업손실",
+        "매출",
+        "분기",
+        "흑자",
+        "적자",
+        "주가",
+        "IPO",
+        "배당",
+        "상장",
+        "거래정지",
+        "합병",
+        "인수",
+        "지분"
+      ]
+    },
+    {
+      "id": "people",
+      "name": "인사·조직",
+      "keywords": [
+        "인사",
+        "대표이사",
+        "신임",
+        "선임",
+        "임명",
+        "조직개편",
+        "채용"
+      ]
+    },
+    {
+      "id": "partnership",
+      "name": "제휴·협력",
+      "keywords": [
+        "제휴",
+        "협력",
+        "업무협약",
+        "MOU",
+        "파트너십",
+        "손잡"
+      ]
+    },
+    {
+      "id": "esg",
+      "name": "ESG·사회공헌",
+      "keywords": [
+        "ESG",
+        "기부",
+        "후원",
+        "사회공헌",
+        "상생",
+        "친환경",
+        "장학",
+        "봉사",
+        "나눔"
+      ]
+    },
+    {
+      "id": "event",
+      "name": "행사·지역",
+      "keywords": [
+        "페스타",
+        "축제",
+        "박람회",
+        "개최",
+        "팝업스토어",
+        "팝업 스토어",
+        "특산품",
+        "지자체",
+        "농가"
+      ]
+    },
+    {
+      "id": "content",
+      "name": "콘텐츠·채널",
+      "keywords": [
+        "콘텐츠",
+        "크리에이터",
+        "유튜브",
+        "모바일 라이브",
+        "라이브커머스",
+        "앱 개편",
+        "리뉴얼",
+        "채널 개편"
+      ]
+    },
+    {
+      "id": "industry",
+      "name": "업계·시장",
+      "keywords": [
+        "홈쇼핑업계",
+        "홈쇼핑 업계",
+        "시장 규모",
+        "거래액",
+        "성장세",
+        "역성장",
+        "탈TV",
+        "TV 시청",
+        "송출수수료"
+      ]
+    }
   ],
   "riskCategories": [
-    { "id": "reapproval", "name": "재승인·인허가", "weight": 2, "keywords": ["재승인", "조건부 승인", "승인 취소", "재허가"] },
-    { "id": "legal", "name": "법무·소송", "weight": 2, "keywords": ["소송", "고소", "고발", "기소", "검찰", "압수수색", "과징금", "시정명령", "배임", "횡령", "공정위 제재"] },
-    { "id": "broadcast", "name": "방송사고·심의", "weight": 3, "keywords": ["방송사고", "방송 중단", "송출 중단", "심의 제재", "방심위", "방송통신심의위원회", "허위과장", "허위·과장", "과장 광고", "과장광고", "방미심위", "방송미디어통신심의위원회", "법정제재", "행정지도", "욕설", "막말"] },
-    { "id": "ad", "name": "뒷광고·PPL", "weight": 2, "keywords": ["뒷광고", "PPL", "협찬 미표기", "기만 광고", "기만광고"] },
-    { "id": "expose", "name": "폭로·이슈", "weight": 3, "keywords": ["사망여우", "폭로", "논란", "불매"] },
-    { "id": "consumer", "name": "소비자 피해", "weight": 2, "keywords": ["환불 거부", "소비자 피해", "리콜", "판매 중단", "판매중단", "이물질", "유해물질", "허위 후기", "분쟁", "피해 구제"] },
-    { "id": "safety", "name": "안전·재해", "weight": 3, "keywords": ["화재", "사망사고", "사망자", "중대재해", "산재"] },
-    { "id": "assembly", "name": "국회·국감", "weight": 1, "keywords": ["국정감사", "국감", "과방위", "청문회", "증인 채택", "증인 출석", "의원"] },
-    { "id": "privacy", "name": "정보보호", "weight": 2, "keywords": ["개인정보 유출", "해킹", "전산 장애", "전산장애"] }
+    {
+      "id": "reapproval",
+      "name": "재승인·인허가",
+      "weight": 2,
+      "keywords": [
+        "재승인",
+        "조건부 승인",
+        "승인 취소",
+        "재허가"
+      ]
+    },
+    {
+      "id": "legal",
+      "name": "법무·소송",
+      "weight": 2,
+      "keywords": [
+        "소송",
+        "고소",
+        "고발",
+        "기소",
+        "검찰",
+        "압수수색",
+        "과징금",
+        "시정명령",
+        "배임",
+        "횡령",
+        "공정위 제재"
+      ]
+    },
+    {
+      "id": "broadcast",
+      "name": "방송사고·심의",
+      "weight": 3,
+      "keywords": [
+        "방송사고",
+        "방송 중단",
+        "송출 중단",
+        "심의 제재",
+        "방심위",
+        "방송통신심의위원회",
+        "허위과장",
+        "허위·과장",
+        "과장 광고",
+        "과장광고",
+        "방미심위",
+        "방송미디어통신심의위원회",
+        "법정제재",
+        "행정지도",
+        "욕설",
+        "막말"
+      ]
+    },
+    {
+      "id": "ad",
+      "name": "뒷광고·PPL",
+      "weight": 2,
+      "keywords": [
+        "뒷광고",
+        "PPL",
+        "협찬 미표기",
+        "기만 광고",
+        "기만광고"
+      ]
+    },
+    {
+      "id": "expose",
+      "name": "폭로·이슈",
+      "weight": 3,
+      "keywords": [
+        "사망여우",
+        "폭로",
+        "논란",
+        "불매"
+      ]
+    },
+    {
+      "id": "consumer",
+      "name": "소비자 피해",
+      "weight": 2,
+      "keywords": [
+        "환불 거부",
+        "소비자 피해",
+        "리콜",
+        "판매 중단",
+        "판매중단",
+        "이물질",
+        "유해물질",
+        "허위 후기",
+        "분쟁",
+        "피해 구제"
+      ]
+    },
+    {
+      "id": "safety",
+      "name": "안전·재해",
+      "weight": 3,
+      "keywords": [
+        "화재",
+        "사망사고",
+        "사망자",
+        "중대재해",
+        "산재"
+      ]
+    },
+    {
+      "id": "assembly",
+      "name": "국회·국감",
+      "weight": 1,
+      "keywords": [
+        "국정감사",
+        "국감",
+        "과방위",
+        "청문회",
+        "증인 채택",
+        "증인 출석",
+        "의원"
+      ]
+    },
+    {
+      "id": "privacy",
+      "name": "정보보호",
+      "weight": 2,
+      "keywords": [
+        "개인정보 유출",
+        "해킹",
+        "전산 장애",
+        "전산장애"
+      ]
+    }
   ],
   "hdhs": {
     "base": "https://hdmzp.github.io/hdhs/",
     "feeds": {
-      "HD": ["HD_live", "HD_data"], "GS": ["GS_live", "GS_data"], "CJ": ["CJ_live", "CJ_data"], "LT": ["LT_live", "LT_data"],
-      "PUBLIC": ["PUBLIC_live"], "HNS": ["HNS_live"], "KTALPHA": ["KTALPHA_live"], "SHINSEGAE": ["SHINSEGAE_live"],
-      "NS": ["NS_live", "NS_plus"], "SHOPPINGNT": ["SHOPPINGNT_live"], "SKSTOA": ["SKSTOA_live"]
+      "HD": [
+        "HD_live",
+        "HD_data"
+      ],
+      "GS": [
+        "GS_live",
+        "GS_data"
+      ],
+      "CJ": [
+        "CJ_live",
+        "CJ_data"
+      ],
+      "LT": [
+        "LT_live",
+        "LT_data"
+      ],
+      "PUBLIC": [
+        "PUBLIC_live"
+      ],
+      "HNS": [
+        "HNS_live"
+      ],
+      "KTALPHA": [
+        "KTALPHA_live"
+      ],
+      "SHINSEGAE": [
+        "SHINSEGAE_live"
+      ],
+      "NS": [
+        "NS_live",
+        "NS_plus"
+      ],
+      "SHOPPINGNT": [
+        "SHOPPINGNT_live"
+      ],
+      "SKSTOA": [
+        "SKSTOA_live"
+      ]
     },
     "rankingChannels": {
-      "hmall": "hyundai", "hmallplus": "hyundai", "gsshop": "gsshop", "gsmyshop": "gsshop",
-      "cjmall": "cj", "cjmallplus": "cj", "lotteimall": "lotte", "lotteonetv": "lotte",
-      "hnsmall": "hns", "kshop": "ktalpha", "ssgshop": "ssglive", "nsmall": "ns", "nsmallplus": "ns",
-      "shopnt": "shoppingnt", "bshop": "skstoa", "wshop": "wshop"
+      "hmall": "hyundai",
+      "hmallplus": "hyundai",
+      "gsshop": "gsshop",
+      "gsmyshop": "gsshop",
+      "cjmall": "cj",
+      "cjmallplus": "cj",
+      "lotteimall": "lotte",
+      "lotteonetv": "lotte",
+      "hnsmall": "hns",
+      "kshop": "ktalpha",
+      "ssgshop": "ssglive",
+      "nsmall": "ns",
+      "nsmallplus": "ns",
+      "shopnt": "shoppingnt",
+      "bshop": "skstoa",
+      "wshop": "wshop"
     }
   },
-  "trending": { "windowHours": 24, "baselineHours": 72, "minCount": 3, "topN": 20 }
+  "trending": {
+    "windowHours": 24,
+    "baselineHours": 72,
+    "minCount": 3,
+    "topN": 20
+  },
+  "noiseTags": [
+    "인사",
+    "인사발령",
+    "인사소식",
+    "인사이동",
+    "인사동정",
+    "동정",
+    "부고",
+    "부음",
+    "오늘의 운세",
+    "운세",
+    "오늘의 날씨",
+    "날씨"
+  ],
+  "noiseTitlePrefixes": [
+    "오늘의 인사",
+    "인사-",
+    "인사 -",
+    "[인사]",
+    "〈인사〉",
+    "<인사>",
+    "부고-",
+    "부고 -"
+  ],
+  "roundupTags": [
+    "산업소식",
+    "산업계 소식",
+    "기업소식",
+    "경제소식",
+    "국감",
+    "금융권 이모저모",
+    "모닝 리포트",
+    "주요일정",
+    "미디어 이슈",
+    "포토",
+    "사진",
+    "영상",
+    "현장",
+    "르포",
+    "기획",
+    "기고",
+    "사설",
+    "기자수첩",
+    "칼럼",
+    "인터뷰",
+    "Who Is ?"
+  ]
 }
