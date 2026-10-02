@@ -7,7 +7,8 @@
 - 2026-10-01: 작업 모드 전환. 연동 저장소 `hdmzp/hdnews` 의 main 을 워크스페이스에 가져옴(shallow fetch, HEAD `bcfa5d2`). 프로젝트 분석: 정적 사이트(index.html + assets/ + data/) + GitHub Actions 수집기(`scripts/collect.py`, Python 표준 라이브러리만 사용, 설치 의존성 없음). dev/preview 서버는 단일 frontend 서비스 `python3 -m http.server 30015 --bind 0.0.0.0`(backend 포트 40015 미사용). 재현용 `Dockerfile`·`docker-compose.yml`·`.dockerignore` 추가(미커밋).
 - 2026-10-02: Phase 1~4 구현 완료, Phase 5 문서 갱신 완료. 작업 브랜치 `feature/mobile-issue-timeline`(main 기준). 수집기 `build_issues`(72h 이슈 묶음·id 승계) + `data/issues.json`(391건, 291KB), 순수 로직 모듈 `assets/issues-core.js` + Node 테스트 9건, 홈/발견/이슈 타임라인/회사/주제 화면 + 하단 내비 + 바로가기 설정 `config/shortcuts.json`, README 갱신.
 - 2026-10-02 08:04~08:05 UTC: 배포 완료. `feature/mobile-issue-timeline` push → PR #23(https://github.com/hdmzp/hdnews/pull/23) → main 머지(`6fb7e0b`, merge commit) → GitHub Pages 배포 success(약 30초) → 라이브 https://hdmzp.github.io/hdnews/ 에서 `app.js?v=21`·`issues-core.js?v=1`·`style.css?v=19`·`data/issues.json`·`config/shortcuts.json` 확인.
-- 남은 일: 다음 Actions 수집(30분 주기) 뒤 `data/issues.json`이 새 기사로 자동 갱신되는지 확인. 바로가기 항목 구성·순서는 `config/shortcuts.json`에서 언제든 조정.
+- 2026-10-02 08:3x UTC: 노이즈 정제 배포. PR #25(규칙·설정·테스트, squash `233b2b9`) → Pages 배포 확인(app.js v22, keywords.json noiseTags/roundupTags 라이브). PR #26(저장된 7일치 기사 재분류 데이터, squash `ad8dffb`)로 다음 수집을 기다리지 않고 즉시 반영. 참고: Actions 스케줄 실행 간격이 실제로는 4시간 안팎(GitHub 지연).
+- 남은 일: 다음 Actions 수집 뒤 `data/issues.json`이 새 기사로 자동 갱신되는지 확인. 바로가기 항목 구성·순서는 `config/shortcuts.json`에서 언제든 조정.
 
 ## Decision Log
 - D1 (2026-10-01): 기존 hdnews 정적 사이트(바닐라 JS + GitHub Actions 수집기) 구조를 유지·확장한다. 이유: 서버·비용 없는 운영 모델과 기존 데이터·기능 재사용. 새 프레임워크 전환은 Non-Goal.
@@ -32,6 +33,7 @@
 - 2026-10-02 Playwright 브라우저 점검(390×844 모바일 + 1280×900 PC, 라이브 프리뷰 30015) → 25개 항목 PASS, 콘솔/페이지 오류 0: AC1 그리드·가로스크롤 없음, AC2 N 배지 소멸, AC3 인기 ≤3, AC6 압축 문구·최신순·NEW, AC7 날짜 구분선·최신순·열람 후 알림 해제·★, AC8 팔로우 유지·필터·알림 점, AC9 발견 칩 311ms·더 보기 링크, F1 내 회사, 검색 리다이렉트, AC10 기존 라우트 9종·구버전 해시·PC 하단 내비 숨김
 - 2026-10-02 스크린샷 확인: 모바일 홈/이슈/상세/발견/회사/리스크, PC 홈·이슈(다크 테마 포함) 레이아웃 정상
 - 2026-10-02 노이즈 정제: `collect.py --selftest`에 연예 '논란'(이민호), 요약만 유통 키워드인 사회 기사(리스크 미부여), [인사] 모음(홈쇼핑사 유무), 오늘의 인사, [산업소식]/[2026 국감](제목 앵커 유무), 유통기업 인사, 신세계百 세일, 계열사 광고모델(홈쇼핑사 언급) 케이스 추가 → 통과. 7일치 14,872건 재분류 비교로 과필터 여부 확인
+- 2026-10-02 정제 배포 검증: 라이브 articles.json에서 '이민호' 기사 8건 모두 noise·리스크 없음, [인사]/[산업소식] 중 비노이즈는 홈쇼핑사(홈앤쇼핑)·유통기업(롯데백화점)이 제목에 있거나 홈쇼핑사가 언급된 기사뿐, 폭로·이슈 리스크 24건
 - 2026-10-02 배포 검증: GitHub Pages deployment 6804082009 state=success(08:05:28Z). 라이브 사이트 대상 같은 Playwright 점검 25개 PASS, 콘솔/페이지 오류 0, 라이브 홈 스크린샷 확인
 
 ## Next Step
