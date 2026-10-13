@@ -77,7 +77,12 @@
     else $main.innerHTML = renderScrap();
     bindPagers();
     const band = document.getElementById("coBand");
-    document.documentElement.style.setProperty("--band-h", band ? band.offsetHeight + "px" : "0px");
+    if (band) {
+      band.classList.remove("collapsed");
+      document.getElementById("bandSpacer").style.height = band.offsetHeight + "px";
+      lastY = window.scrollY;
+    }
+    setBandH();
     bindMiniBar();
   }
 
@@ -221,7 +226,13 @@
       const risk = hs7.some((a) => a.riskScore >= 1 && Date.parse(a.pubDate) >= since48 && (a.mainCompanies || []).includes(c.id));
       return `<button class="co-cell${ui.co === c.id ? " on" : ""}" style="--co:${attr(c.color)}" data-act="co" data-id="${c.id}" aria-pressed="${ui.co === c.id}" title="${attr(c.name)} · 7일 주요 기사 ${n}건${risk ? " · 48시간 내 리스크" : ""}">
         <span class="nm">${esc(CO_LABEL[c.id] || c.short)}</span><span class="n">${n}</span>${risk ? '<span class="rk"></span>' : ""}</button>`;
-    }).join("") + "</div></nav>";
+    }).join("") + "</div>";
+    const selCo = coById(ui.co);
+    const selN = selCo ? hs7.filter((a) => (a.mainCompanies || []).includes(selCo.id)).length : hs7.length;
+    h += `<div class="co-band-mini"><button class="bm-co" data-act="bandOpen" style="--co:${attr(selCo ? selCo.color : "var(--ink)")}" aria-label="회사 선택 펼치기">
+        <b>${esc(selCo ? (CO_LABEL[selCo.id] || selCo.short) : "전체")}</b><span class="n">${selN}</span> ▾</button>
+      <span class="what" id="miniWhat"></span><button class="fold" data-act="toTop">필터 ▴</button></div></nav>`;
+    h += '<div class="band-spacer" id="bandSpacer"></div>';
     h += '<div id="controls"><section class="sec" style="margin-top:10px">';
 
     // ② 한 줄 요약 카드 + 펼치기
@@ -230,7 +241,6 @@
     // ③ 필터: 키워드 검색 / 정렬 / 기간 / 주제(접기)
     h += filterBlock(ui, "hs");
     h += "</div>";
-    h += miniBar();
     h += `<div id="list">${listBlock(applyFilters(hsBase(), ui, D.topics.homeshopping), ui)}</div>`;
     return h;
   }
@@ -397,17 +407,40 @@
     const ui = S.view === "hs" ? S.hs : S.discover;
     const topics = topicList(S.view);
     const bits = [];
-    if (S.view === "hs") { const c = coById(ui.co); bits.push(c ? c.name : "홈쇼핑 전체"); } else bits.push("발견");
+    if (S.view !== "hs") bits.push("발견");
     const t = topics.find((x) => x.id === ui.topic);
     if (t && t.id !== "all") bits.push(t.label);
     if (ui.period) bits.push(ui.period === 1 ? "오늘" : `${ui.period}일`);
     if (ui.q) bits.push(`"${ui.q}"`);
+    if (S.view === "hs") { el.innerHTML = bits.length ? `<span>${esc(bits.join(" · "))}</span>` : '<span>필터 없음</span>'; return; }
     el.innerHTML = esc(bits[0]) + (bits.length > 1 ? ` <span>· ${esc(bits.slice(1).join(" · "))}</span>` : "");
   }
+
+  /* ----- 홈쇼핑 회사 배너: 아래로 스크롤하면 한 줄로 접고, 위로 올리면 다시 펼침 ----- */
+
+  let lastY = 0;
+  function setBandH() {
+    const band = document.getElementById("coBand");
+    document.documentElement.style.setProperty("--band-h", band ? band.offsetHeight + "px" : "0px");
+  }
+  function setBandCollapsed(on) {
+    const band = document.getElementById("coBand");
+    if (!band || band.classList.contains("collapsed") === on) return;
+    band.classList.toggle("collapsed", on);
+    setBandH();
+  }
+  window.addEventListener("scroll", () => {
+    const y = window.scrollY;
+    if (y < 120) setBandCollapsed(false);
+    else if (y > lastY + 6) setBandCollapsed(true);
+    else if (y < lastY - 6) setBandCollapsed(false);
+    if (Math.abs(y - lastY) > 6) lastY = y;
+  }, { passive: true });
 
   let miniObs = null;
   function bindMiniBar() {
     if (miniObs) { miniObs.disconnect(); miniObs = null; }
+    if (document.getElementById("coBand")) updateMiniBar();
     const ctl = document.getElementById("controls"), bar = document.getElementById("miniBar");
     if (!ctl || !bar) return;
     updateMiniBar();
@@ -508,6 +541,7 @@
         if (S.search.open && S.search.q) { S.search.limit = (S.search.limit || LIST_STEP) + LIST_STEP; render(); }
         else { ui.limit += LIST_STEP; renderListOnly(); }
         break;
+      case "bandOpen": setBandCollapsed(false); break;
       case "toTop": window.scrollTo({ top: 0, behavior: "smooth" }); break;
       case "star": toggleStar(id, el); break;
       default: break;
