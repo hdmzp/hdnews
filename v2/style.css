@@ -96,15 +96,16 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px 80px; }
 .chip.risk.on { background: var(--risk); border-color: var(--risk); color: #fff; }
 .chip .c { font-weight: 500; opacity: .6; margin-left: 3px; font-size: 11.5px; }
 
-.co-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.co-btn { height: 44px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; position: relative; }
-.co-btn b { font-size: 14px; font-weight: 800; }
-.co-btn small { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
-.co-btn::before { content: ""; position: absolute; left: 7px; top: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--co); }
-.co-btn.on { background: var(--co); border-color: var(--co); color: #fff; }
-.co-btn.on small { color: rgba(255,255,255,.8); }
-.co-btn.on::before { background: #fff; }
-.co-btn .rk { position: absolute; right: 6px; top: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--risk); }
+/* 홈쇼핑사 슬라이서: 얇은 텍스트 4×3 배너, 헤더 바로 아래 고정 */
+.co-band { position: sticky; top: var(--top-h); z-index: 25; margin: 0 -16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.co-band-in { max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); padding: 4px 0; }
+.co-cell { position: relative; height: 34px; display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 14px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.co-cell:not(:nth-child(4n))::after { content: ""; position: absolute; right: 0; top: 10px; bottom: 10px; width: 1px; background: var(--line); }
+.co-cell .n { color: var(--topic); font-weight: 700; font-variant-numeric: tabular-nums; }
+.co-cell .rk { width: 5px; height: 5px; border-radius: 50%; background: var(--risk); margin-left: -1px; align-self: flex-start; margin-top: 9px; }
+.co-cell.on { color: var(--co); font-weight: 800; }
+.co-cell.on .nm { box-shadow: inset 0 -2px 0 var(--co); }
+@media (min-width: 900px) { .co-band-in { max-width: 1080px; } }
 .hint { font-size: 11.5px; color: var(--muted); margin: 6px 2px 0; }
 
 /* 회사 요약 한 줄 + 펼침 */
@@ -137,7 +138,7 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px 80px; }
 .topic-head { display: flex; align-items: center; justify-content: space-between; }
 
 /* 스크롤 시 나타나는 미니 필터 바 (컨트롤이 화면 밖으로 나가면 헤더 아래로 내려옴) */
-.mini-bar { position: fixed; left: 0; right: 0; top: var(--top-h); z-index: 20; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); transform: translateY(-110%); transition: transform .18s ease; }
+.mini-bar { position: fixed; left: 0; right: 0; top: calc(var(--top-h) + var(--band-h, 0px)); z-index: 20; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); transform: translateY(-110%); transition: transform .18s ease; }
 .mini-bar.show { transform: none; }
 .mini-in { max-width: 760px; margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .mini-in .what { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; }
@@ -185,3 +186,4 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px 80px; }
   .hot-split > * { min-width: 0; }
   .tabs { justify-content: flex-start; margin-left: 12px; }
 }
+@media (max-width: 374px) { .co-cell { font-size: 12.5px; gap: 3px; } }

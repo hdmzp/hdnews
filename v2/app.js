@@ -12,6 +12,9 @@
   const KW_PER_PAGE = 4;
   const ISSUE_PER_PAGE = 8;
   const LIST_STEP = 40;
+  // 슬라이서용 중간 길이 회사명 (4칸에 들어가는 길이)
+  const CO_LABEL = { hyundai: "현대", gsshop: "GS샵", cj: "CJ", lotte: "롯데", gongyoung: "공영", hns: "홈앤",
+    ktalpha: "KT알파", ssglive: "신세계", ns: "NS", shoppingnt: "쇼핑엔티", skstoa: "SK스토아", wshop: "W쇼핑" };
 
   const D = { articles: [], byId: new Map(), trending: null, briefing: null, issues: [], config: null, topics: null, stop: new Set() };
   const savedUi = load(UI_KEY, {});
@@ -73,6 +76,8 @@
     else if (S.view === "hs") $main.innerHTML = renderHs();
     else $main.innerHTML = renderScrap();
     bindPagers();
+    const band = document.getElementById("coBand");
+    document.documentElement.style.setProperty("--band-h", band ? band.offsetHeight + "px" : "0px");
     bindMiniBar();
   }
 
@@ -208,15 +213,16 @@
     const ui = S.hs;
     const since7 = D.ref - 7 * 24 * HOUR, since48 = D.ref - 48 * HOUR;
     const hs7 = D.articles.filter((a) => !a.noise && (a.tabs || []).includes("homeshopping") && Date.parse(a.pubDate) >= since7);
-    let h = '<div id="controls">';
+    let h = "";
 
-    // ① 12개사 슬라이서 (4×3). '전체' 버튼 대신 선택한 회사를 다시 누르면 해제
-    h += '<section class="sec" style="margin-top:12px"><div class="co-grid">' + D.config.companies.map((c) => {
+    // ① 12개사 슬라이서 — 얇은 텍스트 4×3, 헤더 아래 고정. '전체' 버튼 대신 선택한 회사를 다시 누르면 해제
+    h += '<nav class="co-band" id="coBand" aria-label="홈쇼핑사"><div class="co-band-in">' + D.config.companies.map((c) => {
       const n = hs7.filter((a) => (a.mainCompanies || []).includes(c.id)).length;
       const risk = hs7.some((a) => a.riskScore >= 1 && Date.parse(a.pubDate) >= since48 && (a.mainCompanies || []).includes(c.id));
-      return `<button class="co-btn${ui.co === c.id ? " on" : ""}" style="--co:${attr(c.color)}" data-act="co" data-id="${c.id}" title="${attr(c.name)}">
-        <b>${esc(c.short)}</b><small>${n}건</small>${risk ? '<span class="rk" title="48시간 내 리스크 기사"></span>' : ""}</button>`;
-    }).join("") + '</div><p class="hint">7일 주요 기사 수 · 다시 누르면 전체 · <span style="color:var(--risk)">●</span> 48시간 내 리스크</p>';
+      return `<button class="co-cell${ui.co === c.id ? " on" : ""}" style="--co:${attr(c.color)}" data-act="co" data-id="${c.id}" aria-pressed="${ui.co === c.id}" title="${attr(c.name)} · 7일 주요 기사 ${n}건${risk ? " · 48시간 내 리스크" : ""}">
+        <span class="nm">${esc(CO_LABEL[c.id] || c.short)}</span><span class="n">${n}</span>${risk ? '<span class="rk"></span>' : ""}</button>`;
+    }).join("") + "</div></nav>";
+    h += '<div id="controls"><section class="sec" style="margin-top:10px">';
 
     // ② 한 줄 요약 카드 + 펼치기
     h += renderSummary(hs7) + "</section>";
@@ -406,7 +412,7 @@
     if (!ctl || !bar) return;
     updateMiniBar();
     miniObs = new IntersectionObserver(([e]) => bar.classList.toggle("show", !e.isIntersecting && e.boundingClientRect.top < 0),
-      { rootMargin: "-60px 0px 0px 0px" });
+      { rootMargin: `-${60 + ((document.getElementById("coBand") || {}).offsetHeight || 0)}px 0px 0px 0px` });
     miniObs.observe(ctl);
   }
 
