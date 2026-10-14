@@ -383,8 +383,12 @@ def tag_article(art, config):
         config["_retailQueries"] = retail_queries(config)
     queries = art.get("queries")
     from_retail_query = (not queries) or any(q in config["_retailQueries"] for q in queries)
-    brand_hit = _has_any(config.get("retailBrands", []), text)
+    mfg = [b for group in (config.get("manufacturerBrands") or {}).values() for b in group]
+    brand_hit = _has_any(config.get("retailBrands", []), text) or _has_any(mfg, text)
     is_retail = from_retail_query and bool(companies or rcompanies or brand_hit)
+    # 네이버 사회면 + 사건·범죄 단어 → 유통 아님 (매장에서 난 범죄 기사 등)
+    if is_retail and naver_sid(art) == "102" and _has_any(config.get("socialIncidentKeywords", []), text):
+        is_retail = False
     tabs = ["retail"] if is_retail else []
     for tab, rule in tab_rules.items():
         if tab in ("retail", "homeshopping"):
@@ -1222,6 +1226,17 @@ def selftest():
     r4 = {"title": "세븐일레븐, 가을 한정 도시락 출시", "description": "", "queries": ["편의점"]}
     tag_article(r4, config)
     assert "retail" in r4["tabs"], r4               # 유통 브랜드 언급
+    r5 = {"title": "인천 홈플러스 흉기난동…경찰 엄정수사", "description": "", "queries": ["홈플러스"],
+          "link": "https://n.news.naver.com/mnews/article/001/2?sid=102"}
+    tag_article(r5, config)
+    assert "retail" not in r5["tabs"], r5           # 사회면 + 사건·범죄 단어
+    r6 = {"title": "홈플러스, 인천점 영업 재개", "description": "", "queries": ["홈플러스"],
+          "link": "https://n.news.naver.com/mnews/article/001/3?sid=102"}
+    tag_article(r6, config)
+    assert "retail" in r6["tabs"], r6               # 사회면이라도 사건 단어 없으면 유통
+    r7 = {"title": "한섬, 타임 30주년 컬렉션 공개", "description": "", "queries": ["패션 유통"]}
+    tag_article(r7, config)
+    assert "retail" in r7["tabs"], r7               # 패션 제조사
 
     import hsdash
     hsdash.selftest()
