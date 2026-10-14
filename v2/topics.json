@@ -1,0 +1,29 @@
+{
+  "_설명": "v2 화면의 주제 슬라이서. 기사 1건이 match 조건 중 하나라도 맞으면 그 주제에 들어간다. tabs=수집기 탭, cats=수집기 일반 유형 id, risk=true(리스크 점수 1 이상), rcompanies=true(유통사 매칭), keywords=제목+요약에 포함된 단어. 고치면 새로고침 시 바로 반영.",
+  "discover": [
+    { "id": "all", "label": "전체" },
+    { "id": "retail", "label": "유통", "match": { "tabs": ["retail"] } },
+    { "id": "homeshopping", "label": "홈쇼핑", "match": { "tabs": ["homeshopping"] } },
+    { "id": "policy", "label": "정책", "match": { "tabs": ["policy"] } },
+    { "id": "ecommerce", "label": "e커머스", "match": { "tabs": ["ecommerce"] } },
+    { "id": "risk", "label": "리스크", "risk": true, "match": { "risk": true } },
+    { "id": "promo", "label": "홍보", "match": { "cats": ["promo", "marketing"] } },
+    { "id": "launch", "label": "신상품", "match": { "cats": ["launch"] } },
+    { "id": "social", "label": "사회공헌", "match": { "keywords": ["기부", "후원", "사회공헌", "상생", "장학", "봉사", "나눔"] } },
+    { "id": "content", "label": "콘텐츠", "match": { "cats": ["content"] } },
+    { "id": "env", "label": "환경", "match": { "keywords": ["친환경", "ESG", "탄소", "플라스틱", "재활용", "업사이클", "기후", "리필", "포장재"] } }
+  ],
+  "homeshopping": [
+    { "id": "all", "label": "전체" },
+    { "id": "broadcast", "label": "방송·완판", "match": { "cats": ["broadcast_sales"] } },
+    { "id": "launch", "label": "신상품", "match": { "cats": ["launch"] } },
+    { "id": "promo", "label": "프로모션", "match": { "cats": ["promo"] } },
+    { "id": "perf", "label": "실적·재무", "match": { "cats": ["performance"] } },
+    { "id": "policy", "label": "정책·재승인", "match": { "tabs": ["policy"] } },
+    { "id": "fee", "label": "송출수수료", "match": { "keywords": ["송출수수료"] } },
+    { "id": "risk", "label": "리스크", "risk": true, "match": { "risk": true } },
+    { "id": "partner", "label": "제휴·협력", "match": { "cats": ["partnership"] } },
+    { "id": "social", "label": "사회공헌", "match": { "cats": ["esg"] } },
+    { "id": "live", "label": "라이브·콘텐츠", "match": { "cats": ["content"], "keywords": ["라이브커머스", "숏폼", "모바일 라이브", "유튜브"] } }
+  ]
+}

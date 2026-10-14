@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>hdnews</title>
+  <meta name="description" content="유통·홈쇼핑 뉴스 모니터링 (v2 초안)">
+  <link rel="icon" type="image/svg+xml" href="../assets/news-icon.svg">
+  <link rel="stylesheet" href="style.css?v=3">
+</head>
+<body>
+  <header class="top">
+    <div class="top-row">
+      <a class="logo" href="#/hot" aria-label="hdnews 홈"><img src="../assets/news-icon.svg" alt=""></a>
+      <nav class="tabs" aria-label="화면">
+        <a href="#/hot" data-view="hot" class="hot">HOT</a>
+        <a href="#/discover" data-view="discover">발견</a>
+        <a href="#/hs" data-view="hs">홈쇼핑</a>
+        <a href="#/scrap" data-view="scrap">스크랩</a>
+      </nav>
+      <button class="icon-btn" id="searchBtn" aria-label="검색">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </button>
+    </div>
+    <div class="search-row" id="searchRow" hidden>
+      <input type="search" id="searchInput" placeholder="전체 기사에서 검색 (띄어쓰기 = 모두 포함)" autocomplete="off">
+      <button class="text-btn" id="searchClose">닫기</button>
+    </div>
+  </header>
+
+  <main id="main"><div class="empty">불러오는 중…</div></main>
+
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <section class="sheet-box" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <div class="sheet-grip" data-close></div>
+      <div class="sheet-head"><h2 id="sheetTitle"></h2><button class="text-btn" data-close>닫기</button></div>
+      <div class="sheet-body" id="sheetBody"></div>
+    </section>
+  </div>
+
+  <script src="app.js?v=3"></script>
+</body>
+</html>
