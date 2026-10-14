@@ -2,7 +2,7 @@
   "_설명": "v2 화면의 주제 슬라이서. 기사 1건이 match 조건 중 하나라도 맞으면 그 주제에 들어간다. tabs=수집기 탭, cats=수집기 일반 유형 id, risk=true(리스크 점수 1 이상), rcompanies=true(유통사 매칭), keywords=제목+요약에 포함된 단어. 고치면 새로고침 시 바로 반영.",
   "discover": [
     { "id": "all", "label": "전체" },
-    { "id": "retail", "label": "유통", "match": { "rcompanies": true, "keywords": ["유통", "백화점", "대형마트", "편의점", "면세점", "아울렛", "리테일"] } },
+    { "id": "retail", "label": "유통", "match": { "tabs": ["retail"] } },
     { "id": "homeshopping", "label": "홈쇼핑", "match": { "tabs": ["homeshopping"] } },
     { "id": "policy", "label": "정책", "match": { "tabs": ["policy"] } },
     { "id": "ecommerce", "label": "e커머스", "match": { "tabs": ["ecommerce"] } },

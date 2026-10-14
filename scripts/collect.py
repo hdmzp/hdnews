@@ -185,6 +185,7 @@ def fetch_naver(query, client_id, client_secret):
             "pubDate": parse_pubdate(it.get("pubDate", "")),
             "source": "naver",
             "press": derive_press(originallink or it.get("link", "")),
+            "queries": [query],
         })
     return out
 
@@ -221,6 +222,7 @@ def fetch_google(query):
             "pubDate": parse_pubdate(item.findtext("pubDate") or ""),
             "source": "google",
             "press": press,
+            "queries": [query],
         })
     return out
 
@@ -296,6 +298,34 @@ def from_excluded_domain(art, domains):
     return False
 
 
+NAVER_SID_RE = re.compile(r"[?&]sid1?=(\d{3})")
+# 네이버 뉴스 대분류: 100 정치 · 101 경제 · 102 사회 · 103 생활/문화 · 104 세계 · 105 IT/과학
+EXCLUDED_SIDS = {"100"}
+# 유통 판정에 쓰는 검색어 묶음 (정책·리스크 검색어로만 들어온 기사는 '유통 검색어 출처'로 치지 않는다)
+RETAIL_QUERY_GROUPS = ("retail", "homeshopping", "ecommerce")
+
+
+def naver_sid(art):
+    """네이버 호스팅 기사 링크의 대분류 코드 (없으면 빈 문자열)."""
+    m = NAVER_SID_RE.search(art.get("link", ""))
+    return m.group(1) if m else ""
+
+
+def is_excluded_section(art):
+    return naver_sid(art) in EXCLUDED_SIDS
+
+
+def retail_queries(config):
+    """유통 검색어 집합: 홈쇼핑사 별칭·정식명 + 유통·홈쇼핑·e커머스 주제 검색어."""
+    qs = set()
+    for c in config["companies"]:
+        qs.update(c["aliases"])
+        qs.add(c["name"])
+    for g in RETAIL_QUERY_GROUPS:
+        qs.update(config["topicQueries"].get(g, []))
+    return qs
+
+
 TITLE_TAG_RE = re.compile(r"^\s*[\[【〈<]([^\]】〉>]{1,24})[\]】〉>]")
 
 
@@ -347,7 +377,15 @@ def tag_article(art, config):
     # 홈쇼핑 관련: 회사명 매칭 또는 홈쇼핑 키워드가 '제목'에 등장
     hs_kw = tab_rules.get("homeshopping", {}).get("keywords", [])
     hs_related = bool(companies) or _has_any(hs_kw, title)
-    tabs = ["retail"]
+    # 유통 분류: 유통 검색어로 들어온 기사(출처 기록이 없는 예전 기사는 출처 조건 통과)이면서
+    # 유통사·홈쇼핑사·유통 브랜드가 제목/요약에 언급된 기사
+    if "_retailQueries" not in config:
+        config["_retailQueries"] = retail_queries(config)
+    queries = art.get("queries")
+    from_retail_query = (not queries) or any(q in config["_retailQueries"] for q in queries)
+    brand_hit = _has_any(config.get("retailBrands", []), text)
+    is_retail = from_retail_query and bool(companies or rcompanies or brand_hit)
+    tabs = ["retail"] if is_retail else []
     for tab, rule in tab_rules.items():
         if tab in ("retail", "homeshopping"):
             continue
@@ -566,7 +604,7 @@ def compute_briefing(articles, trending, config, now):
         "generatedAt": now.isoformat(),
         "daily": daily,
         "weekly": weekly,
-        "hotRetail": hot_ranking(day24_arts),
+        "hotRetail": hot_ranking([a for a in day24_arts if "retail" in a.get("tabs", [])]),
         "hotHomeshopping": hot_ranking(
             [a for a in day24_arts if "homeshopping" in a.get("tabs", [])]),
     }
@@ -735,6 +773,19 @@ def build_queries(config):
     return dedup(naver), dedup(google)
 
 
+def add_queries(art, queries, config):
+    """같은 기사가 다른 검색어로 또 들어오면 출처 검색어를 합치고 유통 판정을 다시 한다."""
+    if not queries:
+        return
+    cur = art.get("queries")
+    if cur is None:
+        return  # 출처 기록 없는 예전 기사는 그대로 (이미 출처 조건 통과)
+    new = [q for q in queries if q not in cur]
+    if new:
+        art["queries"] = cur + new
+        tag_article(art, config)
+
+
 def merge_articles(existing, fetched_batches, config, now):
     """기존 + 신규 병합. 전재 중복은 버리지 않고 대표 기사의 heat(보도량)로 누적.
 
@@ -748,12 +799,17 @@ def merge_articles(existing, fetched_batches, config, now):
     new_count = 0
     for batch in fetched_batches:
         for raw in batch:
+            if is_excluded_section(raw):
+                continue
             aid = article_id(raw["originallink"], raw["link"])
             if aid in by_id:
+                add_queries(by_id[aid], raw.get("queries"), config)
                 continue
             norm = normalize_title(raw["title"])
             if norm and norm in title_owner:
-                by_id[title_owner[norm]]["heat"] += 1
+                owner = by_id[title_owner[norm]]
+                owner["heat"] += 1
+                add_queries(owner, raw.get("queries"), config)
                 continue
             raw["id"] = aid
             raw["collectedAt"] = now.isoformat()
@@ -805,7 +861,7 @@ def run():
 
     existing_data = load_json(os.path.join(DATA_DIR, "articles.json"),
                               {"articles": []})
-    existing = existing_data.get("articles", [])
+    existing = [a for a in existing_data.get("articles", []) if not is_excluded_section(a)]
     # press 필드 도입 이전에 수집된 기사 백필 (잘못 채워진 구글 도메인도 정정)
     for a in existing:
         if not a.get("press") or a["press"] in ("google.com", "news.google.com"):
@@ -1146,6 +1202,26 @@ def selftest():
     joined = [{"id": "is-b1", "articleIds": ["b1", "b2", "c1"]}]
     inherit_issue_ids(joined, [{"id": "is-b1", "articleIds": ["b1", "b2"]}, {"id": "is-c1", "articleIds": ["c1"]}])
     assert joined[0]["id"] == "is-b1" and joined[0]["prevIds"] == ["is-c1"], joined
+
+    # ---- 정치 제외 / 유통 분류 (검색어 출처 + 유통사·브랜드 언급)
+    pol = {"title": "국힘, 유통법 개정안 발의", "description": "", "link": "https://n.news.naver.com/mnews/article/001/1?sid=100",
+           "originallink": "http://a/1", "pubDate": iso(now), "source": "naver", "queries": ["유통산업"]}
+    merged_p, n_p = merge_articles([], [[pol]], config, now)
+    assert n_p == 0, merged_p
+    r1 = {"title": "이마트, 추석 선물세트 매출 20% 증가", "description": "", "queries": ["대형마트"]}
+    tag_article(r1, config)
+    assert "retail" in r1["tabs"], r1
+    r2 = {"title": "인천 상업시설 흉기 난동…7명 부상", "description": "경찰은 용의자를 검거했다.", "queries": ["편의점"]}
+    tag_article(r2, config)
+    assert "retail" not in r2["tabs"], r2           # 유통 검색어로 들어왔지만 유통사·브랜드 언급 없음
+    r3 = {"title": "롯데마트 과징금 부과", "description": "", "queries": ["공정거래위원회 유통"]}
+    tag_article(r3, config)
+    assert "retail" not in r3["tabs"], r3           # 정책 검색어로만 들어옴
+    add_queries(r3, ["롯데마트"], config)
+    assert "retail" in r3["tabs"], r3               # 유통 검색어로도 들어오면 유통
+    r4 = {"title": "세븐일레븐, 가을 한정 도시락 출시", "description": "", "queries": ["편의점"]}
+    tag_article(r4, config)
+    assert "retail" in r4["tabs"], r4               # 유통 브랜드 언급
 
     import hsdash
     hsdash.selftest()

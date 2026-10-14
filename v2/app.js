@@ -162,7 +162,7 @@
 
   function isRelevant(a) {
     return (a.companies || []).length || (a.rcompanies || []).length ||
-      (a.tabs || []).some((t) => t === "homeshopping" || t === "policy" || t === "ecommerce");
+      (a.tabs || []).some((t) => t === "retail" || t === "homeshopping" || t === "policy" || t === "ecommerce");
   }
 
   function matchTitle(kw, since) {
