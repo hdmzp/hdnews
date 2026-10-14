@@ -357,8 +357,15 @@ def tag_article(art, config):
         tabs.append("homeshopping")
     risk_cats, score = [], 0
     if strong or companies:
+        co_aliases = [al for c in config["companies"] for al in c["aliases"]]
         for cat in config["riskCategories"]:
-            if _has_any(cat["keywords"], text):
+            if cat.get("titleOnly"):
+                # 국회·국감: 제목에 국감류 단어 + 홈쇼핑사·홈쇼핑 맥락(송출수수료·판로 등)이 함께 있어야 함
+                hit = _has_any(cat["keywords"], title) and (
+                    _has_any(cat.get("titleContext", []), title) or _has_any(co_aliases, title))
+            else:
+                hit = _has_any(cat["keywords"], text)
+            if hit:
                 risk_cats.append(cat["id"])
                 score += cat["weight"]
     score = min(score, RISK_SCORE_CAP)
@@ -927,7 +934,13 @@ def selftest():
     assert art["mainCompanies"] == ["hns"], art
     audit = {"title": "국감 카운트다운…CEO 줄소환 예고", "description": "롯데홈쇼핑 대표 증인 채택"}
     tag_article(audit, config)
-    assert "assembly" in audit["riskCategories"] and audit["mainCompanies"] == [], audit
+    assert "assembly" not in audit["riskCategories"] and audit["mainCompanies"] == [], audit   # 제목에 홈쇼핑 맥락 없음
+    audit2 = {"title": "[국감] 홈쇼핑 송출수수료 갈등 도마…롯데홈쇼핑 대표 증인 채택", "description": ""}
+    tag_article(audit2, config)
+    assert "assembly" in audit2["riskCategories"], audit2
+    audit3 = {"title": "학원가 편의점서 고카페인 제품 판매 급증", "description": "한 의원은 대책을 촉구했다."}
+    tag_article(audit3, config)
+    assert "assembly" not in audit3["riskCategories"], audit3
     agg = aggregate([dict(brief, pubDate="2026"), dict(art, pubDate="2026")], config)
     assert agg["byCompany"] == {"hns": 1} and agg["mentionByCompany"] == {"ns": 1}, agg
 
